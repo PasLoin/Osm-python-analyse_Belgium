@@ -32,7 +32,11 @@ class OSMHandler(osmium.SimpleHandler):
 # Print current working directory
 print("Current working directory:", os.getcwd())
 
-# Download OSM data
+# Create the 'graphs' directory
+os.makedirs("graphs", exist_ok=True)
+print("Created 'graphs' directory")
+
+# Download OSM data into the 'graphs' directory
 os.system("wget https://download.geofabrik.de/europe/belgium-latest.osm.pbf -O graphs/belgium-latest.osm.pbf")
 print("Downloaded OSM data")
 
@@ -43,18 +47,12 @@ input_pbf_file = 'graphs/belgium-latest.osm.pbf'
 if not os.path.isfile(input_pbf_file):
     raise FileNotFoundError(f"File not found: {input_pbf_file}")
 
-print("Input file exists")
-
 # Initialize the OSMHandler and apply it to the input file
 handler = OSMHandler()
 handler.apply_file(input_pbf_file)
 
-print("Applied OSMHandler")
-
 # Create a GeoDataFrame from the tagged locations
 gdf = gpd.GeoDataFrame(geometry=handler.tagged_locations)
-
-print("Created GeoDataFrame")
 
 # Set the coordinate reference system explicitly
 gdf.crs = 'EPSG:4326'
