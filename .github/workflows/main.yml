@@ -26,6 +26,7 @@ jobs:
       run: |
         mkdir -p graphs
         wget https://download.geofabrik.de/europe/belgium-latest.osm.pbf -O graphs/belgium-latest.osm.pbf
-
     - name: Generate Fritures Map
-      run: python /amenity/fritures-ga.py
+      run: |
+        cd amenity
+        python fritures-ga.py
