@@ -38,6 +38,10 @@ os.system("wget https://download.geofabrik.de/europe/belgium-latest.osm.pbf -O g
 # Specify the input PBF file
 input_pbf_file = 'graphs/belgium-latest.osm.pbf'
 
+# Check if the file exists
+if not os.path.isfile(input_pbf_file):
+    raise FileNotFoundError(f"File not found: {input_pbf_file}")
+
 # Initialize the OSMHandler and apply it to the input file
 handler = OSMHandler()
 handler.apply_file(input_pbf_file)
@@ -51,7 +55,10 @@ gdf.crs = 'EPSG:4326'
 # Reproject the GeoDataFrame to Web Mercator (EPSG:3857)
 gdf = gdf.to_crs(epsg=3857)
 
-# Print the output path
+# Print the current working directory before saving
+print("Current working directory (before saving):", os.getcwd())
+
+# Specify the absolute output path
 output_path = os.path.abspath("graphs/fritures.jpg")
 print("Saving to:", output_path)
 
@@ -63,6 +70,9 @@ ctx.add_basemap(ax, crs=gdf.crs, source=ctx.providers.OpenStreetMap.Mapnik)
 
 # Save the resulting map
 plt.savefig(output_path)
+
+# Close the plot
+plt.close()
 
 # Print a success message
 print("File saved successfully!")
