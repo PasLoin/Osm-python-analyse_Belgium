@@ -22,7 +22,23 @@ jobs:
       run: |
         pip install -r requirements.txt
 
+    - name: Download OSM data
+      run: |
+        mkdir -p graphs
+        wget https://download.geofabrik.de/europe/belgium-latest.osm.pbf -O graphs/belgium-latest.osm.pbf
+
     - name: Generate Fritures Map
       run: |
         cd amenity
         python fritures-ga.py
+
+    - name: Configure Git
+      run: |
+        git config --global user.name "${{ github.actor }}"
+        git config --global user.email "${{ github.actor }}@users.noreply.github.com"
+
+    - name: Commit and Push Changes
+      run: |
+        git add graphs/fritures.jpg
+        git commit -m "Add fritures.jpg"
+        git push
