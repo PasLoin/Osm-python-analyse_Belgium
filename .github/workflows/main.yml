@@ -28,4 +28,4 @@ jobs:
         wget https://download.geofabrik.de/europe/belgium-latest.osm.pbf -O graphs/belgium-latest.osm.pbf
 
     - name: Generate Fritures Map
-      run: python your_script.py
+      run: python /amenity/fritures-ga.py
