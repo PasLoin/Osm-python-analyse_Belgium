@@ -1,5 +1,5 @@
 import os
-import osmium  # Add this line
+import osmium
 import geopandas as gpd
 import matplotlib.pyplot as plt
 import contextily as ctx
@@ -33,10 +33,10 @@ class OSMHandler(osmium.SimpleHandler):
 print("Current working directory:", os.getcwd())
 
 # Download OSM data
-os.system("wget https://download.geofabrik.de/europe/belgium-latest.osm.pbf -O amenity/graphs/belgium-latest.osm.pbf")
+os.system("wget https://download.geofabrik.de/europe/belgium-latest.osm.pbf -O graphs/belgium-latest.osm.pbf")
 
 # Specify the input PBF file
-input_pbf_file = 'amenity/graphs/belgium-latest.osm.pbf'
+input_pbf_file = 'graphs/belgium-latest.osm.pbf'
 
 # Initialize the OSMHandler and apply it to the input file
 handler = OSMHandler()
@@ -52,7 +52,7 @@ gdf.crs = 'EPSG:4326'
 gdf = gdf.to_crs(epsg=3857)
 
 # Print the output path
-output_path = os.path.abspath("amenity/graphs/fritures.jpg")
+output_path = os.path.abspath("graphs/fritures.jpg")
 print("Saving to:", output_path)
 
 # Plot the GeoDataFrame with a background basemap using contextily
