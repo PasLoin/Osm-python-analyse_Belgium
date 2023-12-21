@@ -5,6 +5,10 @@ import matplotlib.pyplot as plt
 import contextily as ctx
 from shapely.geometry import Point
 
+# Set the working directory to the script location
+script_dir = os.path.dirname(os.path.abspath(__file__))
+os.chdir(script_dir)
+
 class OSMHandler(osmium.SimpleHandler):
     def __init__(self):
         super(OSMHandler, self).__init__()
