@@ -1,9 +1,8 @@
-import osmium
+import os
 import geopandas as gpd
 import matplotlib.pyplot as plt
 import contextily as ctx
 from shapely.geometry import Point
-import os
 
 class OSMHandler(osmium.SimpleHandler):
     def __init__(self):
@@ -29,11 +28,14 @@ class OSMHandler(osmium.SimpleHandler):
             if n.location.valid():
                 self.tagged_locations.append(Point(n.location.lon, n.location.lat))
 
+# Print current working directory
+print("Current working directory:", os.getcwd())
+
 # Download OSM data
-os.system("wget https://download.geofabrik.de/europe/belgium-latest.osm.pbf -O belgium-latest.osm.pbf")
+os.system("wget https://download.geofabrik.de/europe/belgium-latest.osm.pbf -O amenity/graphs/belgium-latest.osm.pbf")
 
 # Specify the input PBF file
-input_pbf_file = 'belgium-latest.osm.pbf'
+input_pbf_file = 'amenity/graphs/belgium-latest.osm.pbf'
 
 # Initialize the OSMHandler and apply it to the input file
 handler = OSMHandler()
@@ -48,19 +50,21 @@ gdf.crs = 'EPSG:4326'
 # Reproject the GeoDataFrame to Web Mercator (EPSG:3857)
 gdf = gdf.to_crs(epsg=3857)
 
+# Print the output path
+output_path = os.path.abspath("amenity/graphs/fritures.jpg")
+print("Saving to:", output_path)
+
 # Plot the GeoDataFrame with a background basemap using contextily
 ax = gdf.plot(figsize=(10, 10), color='red', marker='o', markersize=50, alpha=0.5)
 
 # Add a background basemap
 ctx.add_basemap(ax, crs=gdf.crs, source=ctx.providers.OpenStreetMap.Mapnik)
 
-# Customize the plot
-plt.title('Locations of Ways or Nodes with cuisine=friture')
-plt.xlabel('Longitude')
-plt.ylabel('Latitude')
-
 # Save the resulting map
-plt.savefig('fritures.jpg')
+plt.savefig(output_path)
+
+# Print a success message
+print("File saved successfully!")
 
 # Show the plot (optional)
 plt.show()
