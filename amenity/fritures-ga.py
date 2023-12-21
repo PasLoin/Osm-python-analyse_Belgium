@@ -60,8 +60,8 @@ gdf.crs = 'EPSG:4326'
 # Reproject the GeoDataFrame to Web Mercator (EPSG:3857)
 gdf = gdf.to_crs(epsg=3857)
 
-# Print the current working directory before saving
-print("Current working directory (before saving):", os.getcwd())
+# Print the content of the 'graphs' directory before saving
+print("Content of 'graphs' directory before saving:", os.listdir("graphs"))
 
 # Specify the absolute output path
 output_path = os.path.abspath("graphs/fritures.jpg")
@@ -75,6 +75,9 @@ ctx.add_basemap(ax, crs=gdf.crs, source=ctx.providers.OpenStreetMap.Mapnik)
 
 # Save the resulting map
 plt.savefig(output_path)
+
+# Print the content of the 'graphs' directory after saving
+print("Content of 'graphs' directory after saving:", os.listdir("graphs"))
 
 # Close the plot
 plt.close()
