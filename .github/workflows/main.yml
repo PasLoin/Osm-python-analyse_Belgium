@@ -1,0 +1,31 @@
+name: Generate Fritures Map
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  generate_map:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v2
+
+    - name: Set up Python
+      uses: actions/setup-python@v2
+      with:
+        python-version: 3.12
+
+    - name: Install dependencies
+      run: |
+        pip install -r requirements.txt
+
+    - name: Download OSM data
+      run: |
+        mkdir -p graphs
+        wget https://download.geofabrik.de/europe/belgium-latest.osm.pbf -O graphs/belgium-latest.osm.pbf
+
+    - name: Generate Fritures Map
+      run: python your_script.py
