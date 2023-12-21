@@ -22,10 +22,6 @@ jobs:
       run: |
         pip install -r requirements.txt
 
-    - name: Download OSM data
-      run: |
-        mkdir -p graphs
-        wget https://download.geofabrik.de/europe/belgium-latest.osm.pbf -O graphs/belgium-latest.osm.pbf
     - name: Generate Fritures Map
       run: |
         cd amenity
