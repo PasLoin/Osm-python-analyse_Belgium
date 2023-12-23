@@ -3,6 +3,7 @@ name: Download Belgium OSM PBF
 on:
   schedule:
     - cron: '0 3 * * *' # Runs every night at 3:00 AM
+  workflow_dispatch: # This allows manual triggering
 
 jobs:
   download:
