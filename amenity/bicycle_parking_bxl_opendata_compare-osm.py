@@ -9,6 +9,7 @@ import osmium as o
 from geopy.distance import geodesic
 from pyproj import Transformer
 
+# Class for handling bicycle parking nodes in OSM data
 class BicycleParkingHandler(o.SimpleHandler):
     def __init__(self):
         super(BicycleParkingHandler, self).__init__()
@@ -17,10 +18,12 @@ class BicycleParkingHandler(o.SimpleHandler):
     def node(self, n):
         if n.location.valid():
             tags = dict(n.tags)
+            # Check if the node represents a bicycle parking amenity
             if 'amenity' in tags and tags['amenity'] == 'bicycle_parking':
                 node_location = (n.location.lat, n.location.lon)
                 self.bicycle_parking_cache[n.id] = {'node_id': n.id, 'location': node_location, 'tags': tags}
 
+# Class for matching bicycle parking nodes between JSON and OSM data
 class BicycleParkingMatcher:
     def __init__(self, json_file_path, pbf_file_path, output_csv_file_path, unmatched_osm_file_path):
         self.json_file_path = json_file_path
@@ -30,6 +33,7 @@ class BicycleParkingMatcher:
         self.handler = BicycleParkingHandler()
         self.matched_df = None
 
+    # Read and preprocess JSON data
     def read_json_data(self):
         print("Reading JSON data...")
         with open(self.json_file_path, 'r') as json_file:
@@ -40,12 +44,14 @@ class BicycleParkingMatcher:
                 feature['geometry']['coordinates'] = [lat, lon]
         return json_data['features']
 
+    # Read OSM data using osmium library
     def read_osm_data(self):
         print("Reading OSM data...")
         osm_file = o.io.Reader(self.pbf_file_path)
         o.apply(osm_file, self.handler)
         osm_file.close()
 
+    # Match bicycle parking nodes based on proximity
     def match_bicycle_parking(self, bicycle_parking_nodes, max_data_count, threshold_meters):
         print("Matching bicycle parking nodes...")
         matched_data = []
@@ -69,13 +75,18 @@ class BicycleParkingMatcher:
         self.matched_df.to_csv(self.output_csv_file_path, index=False)
         print(f"Matching data saved to {self.output_csv_file_path}")
 
+    # Efficiently generate unmatched OSM file by writing each unmatched node line by line
     def generate_unmatched_osm_file(self, max_data_count, threshold_meters):
         print(f"Generating Unmatched OSM file for the first {max_data_count} bicycle parking nodes...")
-        with open(self.unmatched_osm_file_path, 'w') as osm_file:
+        unmatched_osm_file_path = self.unmatched_osm_file_path
+
+        with open(unmatched_osm_file_path, 'w') as osm_file:
             osm_file.write('<?xml version="1.0" encoding="UTF-8"?>\n')
             osm_file.write('<osm version="0.6" generator="BicycleParkingMatcher">\n')
 
             node_id_counter = 1
+            unmatched_count = 0
+
             for json_node in bicycle_parking_nodes[:max_data_count]:
                 json_location = tuple(json_node['geometry']['coordinates'])
                 is_matched = False
@@ -94,18 +105,24 @@ class BicycleParkingMatcher:
                     osm_file.write(f'    <tag k="amenity" v="bicycle_parking"/>\n')
                     osm_file.write(f'    <tag k="capacity" v="{json_node["properties"].get("capacity", "")}"/>\n')
                     osm_file.write('  </node>\n')
+
                     node_id_counter += 1
+                    unmatched_count += 1
 
             osm_file.write('</osm>\n')
-            print(f"Unmatched OSM file generated and saved to {self.unmatched_osm_file_path}")
 
+        print(f"Unmatched OSM file generated and saved to {unmatched_osm_file_path}")
+
+    # Coordinate transformation from one projection to another
     def transform_coordinates(self, x, y):
         in_proj = 'EPSG:31370'
         out_proj = 'EPSG:4326'
         transformer = Transformer.from_crs(in_proj, out_proj, always_xy=True)
         return transformer.transform(x, y)
 
+# Main program
 if __name__ == "__main__":
+    # User inputs
     json_path = 'geoserver-GetFeature.application.json'
     pbf_path = 'brussels_capital_region.pbf'
     output_csv_path = 'matched_bicycle_parking.csv'
@@ -114,11 +131,17 @@ if __name__ == "__main__":
     max_data_count = int(input("Enter the maximum data count: "))
     threshold_meters = float(input("Enter the threshold distance in meters: "))
 
+    # Instantiate the matcher
     bike_parking_matcher = BicycleParkingMatcher(
         json_path, pbf_path, output_csv_path, unmatched_osm_path
     )
 
+    # Read JSON and OSM data
     bicycle_parking_nodes = bike_parking_matcher.read_json_data()
     bike_parking_matcher.read_osm_data()
+
+    # Match bicycle parking nodes
     bike_parking_matcher.match_bicycle_parking(bicycle_parking_nodes, max_data_count, threshold_meters)
+
+    # Generate unmatched OSM file
     bike_parking_matcher.generate_unmatched_osm_file(max_data_count, threshold_meters)
