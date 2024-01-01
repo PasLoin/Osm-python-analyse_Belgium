@@ -1,6 +1,14 @@
+#### compare trees data between OSM and http://data-mobility.irisnet.be/fr/info/trees/ Use csv lat/lon
+
 import pandas as pd
 import osmium as o
 from geopy.distance import geodesic
+
+class Node:
+    def __init__(self, node_id, location, tags):
+        self.node_id = node_id
+        self.location = location
+        self.tags = tags
 
 class NodeCacheHandler(o.SimpleHandler):
     def __init__(self):
@@ -10,7 +18,7 @@ class NodeCacheHandler(o.SimpleHandler):
     def node(self, n):
         if n.location.valid():
             node_location = (n.location.lat, n.location.lon)
-            self.node_cache[n.id] = {'node_id': n.id, 'location': node_location, 'tags': dict(n.tags)}
+            self.node_cache[n.id] = Node(n.id, node_location, dict(n.tags))
 
 class OSMTreeMatcher:
     def __init__(self, pbf_file_path, csv_file_path, output_csv_file_path, output_osm_file_path, threshold_meters=2, max_tree_nodes=None):
@@ -23,6 +31,7 @@ class OSMTreeMatcher:
         self.handler = NodeCacheHandler()
         self.csv_data = None
         self.matched_data = None
+        self.tree_nodes = {}
 
     def read_osm_data(self):
         osm_file = o.io.Reader(self.pbf_file_path)
@@ -41,25 +50,47 @@ class OSMTreeMatcher:
         return lat, lon
 
     def search_pbf_nodes(self):
-        tree_nodes = []
+        self.tree_nodes = {}
+        tree_counter = 0  # Counter for the number of processed tree nodes
 
-        for node_id, node_info in self.handler.node_cache.items():
-            tags = node_info['tags']
-            circumference = tags.get('circumference')
+        # Prompt the user for sorting direction
+        sorting_direction = input("Enter the sorting direction for node search (asc/desc): ").lower()
+        if sorting_direction not in ['asc', 'desc']:
+            print("Invalid sorting direction. Defaulting to descending order.")
+            sorting_direction = 'desc'
 
-            if tags.get('natural') == 'tree' and circumference is not None and float(circumference) > 100:
-                additional_tags = {key: value for key, value in tags.items() if key != 'natural' and key != 'circumference'}
-                tree_nodes.append({
-                    'node_id': node_id,
-                    'location': node_info['location'],
-                    'additional_tags': additional_tags
-                })
+        # Sort nodes based on OSM ID and sorting direction
+        sorted_nodes = sorted(self.handler.node_cache.items(), key=lambda x: x[0], reverse=(sorting_direction == 'desc'))
 
-                if self.max_tree_nodes is not None and len(tree_nodes) >= self.max_tree_nodes:
-                    break
+        for node_id, node_info in sorted_nodes:
+            location = node_info.location
 
-        print(f"Number of tree nodes found in PBF: {len(tree_nodes)}")
-        return tree_nodes
+            if isinstance(location, tuple) and len(location) == 2:
+                lat, lon = location
+                tags = node_info.tags
+                circumference = tags.get('circumference')
+
+                try:
+                    if tags.get('natural') == 'tree' and circumference is not None and float(circumference) > 100:
+                        additional_tags = {key: value for key, value in tags.items() if key != 'natural' and key != 'circumference'}
+                        self.tree_nodes[node_id] = {
+                            'node_id': node_id,
+                            'location': location,
+                            'additional_tags': additional_tags
+                        }
+
+                        # Print information for the first 10 tree nodes
+                        if tree_counter < 10:
+                            print(f"Tree Node ID: {node_id}, Location: {location}, Additional Tags: {additional_tags}")
+                            tree_counter += 1
+
+                        if self.max_tree_nodes is not None and len(self.tree_nodes) >= self.max_tree_nodes:
+                            break
+                except ValueError:
+                    print(f"Skipping node ID {node_id} due to invalid 'circumference' value: {circumference}")
+
+        print(f"Number of tree nodes found in PBF: {len(self.tree_nodes)}")
+        return self.tree_nodes
 
     def match_trees(self, tree_nodes):
         matched_data_list = []
@@ -70,20 +101,20 @@ class OSMTreeMatcher:
 
             lat, lon = self.extract_lat_lon(csv_row['geom'])
 
-            for node_info in tree_nodes:
+            for node_id, node_info in tree_nodes.items():
                 node_lat, node_lon = node_info['location']
                 distance = geodesic((lat, lon), (node_lat, node_lon)).meters
 
                 if distance < self.threshold_meters:
                     matched_data_list.append({
-                        'Node_ID': node_info['node_id'],
+                        'Node_ID': node_id,
                         'CSV_Row_Index': _,
                         'Distance': distance,
                         'Numident': csv_row['numident'],
                         'Circumference': csv_row['circumference']
                     })
 
-                    print(f"Match found for CSV row {_} with Node ID {node_info['node_id']} "
+                    print(f"Match found for CSV row {_} with Node ID {node_id} "
                           f"(Distance: {distance:.2f} meters), "
                           f"Numident: {csv_row['numident']}, Circumference (CSV): {csv_row['circumference']}")
 
@@ -91,7 +122,7 @@ class OSMTreeMatcher:
         self.matched_data.to_csv(self.output_csv_file_path, index=False)
         print(f"Matching data saved to {self.output_csv_file_path}")
 
-    def generate_osm_file(self, tree_nodes):
+    def generate_osm_file(self, tree_nodes, coordinate_source='csv'):
         with open(self.output_osm_file_path, 'w', encoding='utf-8') as osm_file:
             osm_file.write('<?xml version="1.0" encoding="UTF-8"?>\n')
             osm_file.write('<osm version="0.6" generator="osmium/1.14">\n')
@@ -99,7 +130,18 @@ class OSMTreeMatcher:
             # Write nodes from matching CSV data
             for _, row in self.matched_data.iterrows():
                 node_id = row['Node_ID']
-                lat, lon = self.extract_lat_lon(self.csv_data.loc[row['CSV_Row_Index'], 'geom'])
+
+                if coordinate_source == 'csv':
+                    lat, lon = self.extract_lat_lon(self.csv_data.loc[row['CSV_Row_Index'], 'geom'])
+                elif coordinate_source == 'pbf':
+                    if node_id in tree_nodes:
+                        lat, lon = tree_nodes[node_id]['location']
+                    else:
+                        print(f"Node ID {node_id} not found in PBF data.")
+                        continue
+                else:
+                    raise ValueError("Invalid coordinate source. Use 'csv' or 'pbf'.")
+
                 circumference_m = float(row['Circumference']) / 100.0
 
                 osm_file.write(f'  <node id="{node_id}" lat="{lat}" lon="{lon}" version="1">\n')
@@ -133,6 +175,12 @@ if __name__ == "__main__":
     else:
         threshold_meters = 0.2
 
+    # Prompt the user for the coordinate source
+    coordinate_source = input("Enter the coordinate source for the generation of the osm file (csv/pbf): ").lower()
+    if coordinate_source not in ['csv', 'pbf']:
+        print("Invalid coordinate source. Please enter 'csv' or 'pbf'.")
+        exit()
+
     # Create an instance of OSMTreeMatcher with the output CSV and OSM file paths
     tree_matcher = OSMTreeMatcher(pbf_path, csv_path, output_csv_path, output_osm_path, threshold_meters, max_tree_nodes=max_tree_nodes)
 
@@ -148,5 +196,5 @@ if __name__ == "__main__":
     # Match trees between CSV and PBF data
     tree_matcher.match_trees(tree_nodes)
 
-    # Generate OSM file
-    tree_matcher.generate_osm_file(tree_nodes)
+    # Generate OSM file with coordinates from the specified source
+    tree_matcher.generate_osm_file(tree_nodes, coordinate_source=coordinate_source)
