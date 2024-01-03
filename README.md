@@ -1,7 +1,7 @@
 # Osm-python-analyse_Belgium
  
 
-Some python script to analyse Belgium data.
+Some python script to analyse OpenstreetMap Belgium data.
 
 
 
