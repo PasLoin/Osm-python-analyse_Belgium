@@ -1,4 +1,3 @@
-# Owner avatar
 # Osm-python-analyse_Belgium
  
 
