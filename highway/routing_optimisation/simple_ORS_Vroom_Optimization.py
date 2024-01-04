@@ -4,6 +4,7 @@ import folium
 from folium.plugins import BeautifyIcon
 import pandas as pd
 import openrouteservice as ors
+import json
 
 class DeliveryMap:
     def __init__(self, center, zoom):
@@ -93,7 +94,11 @@ class DeliveryMap:
         # Print the API response
         print("API Response:")
         print(self.result)
-
+        
+        # Save result to a file
+        with open('result.json', 'w') as f:
+            json.dump(self.result, f)       
+    
     def add_routes_to_map(self):
         for color, route in zip(['green', 'red', 'blue'], self.result['routes']):
             decoded = ors.convert.decode_polyline(route['geometry'])
