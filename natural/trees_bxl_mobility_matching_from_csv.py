@@ -2,6 +2,18 @@
 ##### http://data-mobility.irisnet.be/fr/info/trees/ 
 #####Use csv lat/lon
 
+#import requests
+
+#url = "https://data.mobility.brussels/geoserver/bm_public_space/wfs?service=wfs&version=1.1.0&request=GetFeature&typeName=bm_public_space:trees&outputFormat=csv&srsName=EPSG:4326"
+#r = requests.get(url)
+#with open("trees.csv", "wb") as f:
+#    f.write(r.content)
+
+#url = "https://osmtoday.com/europe/belgium/brussels_capital_region.pbf"
+#r = requests.get(url)
+#with open("brussels_capital_region.pbf", "wb") as f:
+#    f.write(r.content)
+
 import pandas as pd
 import osmium as o
 from geopy.distance import geodesic
