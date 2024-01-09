@@ -1,7 +1,8 @@
-#### compare trees data between OSM and 
-##### http://data-mobility.irisnet.be/fr/info/trees/ 
-#####Use csv lat/lon
+#Compare trees data between OSM and 
+## http://data-mobility.irisnet.be/fr/info/trees/ 
+### Use csv lat/lon
 
+# Automatic download : 
 #import requests
 
 #url = "https://data.mobility.brussels/geoserver/bm_public_space/wfs?service=wfs&version=1.1.0&request=GetFeature&typeName=bm_public_space:trees&outputFormat=csv&srsName=EPSG:4326"
@@ -16,7 +17,24 @@
 
 import pandas as pd
 import osmium as o
-from geopy.distance import geodesic
+from math import radians, sin, cos, sqrt, atan2
+
+def haversine_distance(coord1, coord2):
+    # Radius of the Earth in kilometers
+    R = 6371.0
+
+    lat1, lon1 = map(radians, coord1)
+    lat2, lon2 = map(radians, coord2)
+
+    dlat = lat2 - lat1
+    dlon = lon2 - lon1
+
+    a = sin(dlat / 2)**2 + cos(lat1) * cos(lat2) * sin(dlon / 2)**2
+    c = 2 * atan2(sqrt(a), sqrt(1 - a))
+
+    distance = R * c
+    return distance
+
 
 class Node:
     def __init__(self, node_id, location, tags):
@@ -59,6 +77,7 @@ class OSMTreeMatcher:
         dtype_mapping = {'numident': str, 'crown_diam': str}
         self.csv_data = pd.read_csv(self.csv_file_path, names=column_names, skiprows=1, dtype=dtype_mapping, decimal=',')
 
+
     def extract_lat_lon(self, geom_str):
         lon, lat = map(float, geom_str.split('(')[-1].split(')')[0].split())
         return lat, lon
@@ -85,7 +104,7 @@ class OSMTreeMatcher:
                 circumference = tags.get('circumference')
 
                 try:
-                    if tags.get('natural') == 'tree' and circumference is not None and float(circumference) > 100:
+                    if tags.get('natural') == 'tree' and circumference is not None and float(circumference) > 100:  ##### Adapt here the min circumference to check)
                         additional_tags = {key: value for key, value in tags.items() if key != 'natural' and key != 'circumference'}
                         self.tree_nodes[node_id] = {
                             'node_id': node_id,
@@ -95,7 +114,7 @@ class OSMTreeMatcher:
 
                         # Print information for the first 10 tree nodes
                         if tree_counter < 10:
-                            print(f"Tree Node ID: {node_id}, Location: {location}, Additional Tags: {additional_tags}")
+                            #print(f"Tree Node ID: {node_id}, Location: {location}, Additional Tags: {additional_tags}")
                             tree_counter += 1
 
                         if self.max_tree_nodes is not None and len(self.tree_nodes) >= self.max_tree_nodes:
@@ -103,47 +122,61 @@ class OSMTreeMatcher:
                 except ValueError:
                     print(f"Skipping node ID {node_id} due to invalid 'circumference' value: {circumference}")
 
-        print(f"Number of tree nodes found in PBF: {len(self.tree_nodes)}")
+        print(f"Number of tree nodes to analyse : {len(self.tree_nodes)}")
         return self.tree_nodes
+
 
     def match_trees(self, tree_nodes):
         matched_data_list = []
+        matched_csv_rows = set()
 
         for _, csv_row in self.csv_data.iterrows():
             if csv_row['status'] != 'en vie' or csv_row['circumference'] == '0':
                 continue
 
             lat, lon = self.extract_lat_lon(csv_row['geom'])
+            closest_match = None
+            min_distance = float('inf')
 
             for node_id, node_info in tree_nodes.items():
                 node_lat, node_lon = node_info['location']
-                distance = geodesic((lat, lon), (node_lat, node_lon)).meters
+                distance = haversine_distance((lat, lon), (node_lat, node_lon))
 
-                if distance < self.threshold_meters:
-                    matched_data_list.append({
+                if distance < self.threshold_meters and distance < min_distance:
+                    min_distance = distance
+                    closest_match = {
                         'Node_ID': node_id,
                         'CSV_Row_Index': _,
                         'Distance': distance,
                         'Numident': csv_row['numident'],
                         'Circumference': csv_row['circumference']
-                    })
+                    }
 
-                    print(f"Match found for CSV row {_} with Node ID {node_id} "
-                          f"(Distance: {distance:.2f} meters), "
-                          f"Numident: {csv_row['numident']}, Circumference (CSV): {csv_row['circumference']}")
+            if closest_match:
+                matched_data_list.append(closest_match)
+                matched_csv_rows.add(_)
 
         self.matched_data = pd.DataFrame(matched_data_list)
-        self.matched_data.to_csv(self.output_csv_file_path, index=False)
-        print(f"Matching data saved to {self.output_csv_file_path}")
+
+        #print(f"Number of CSV rows analyzed to have the match : {len(matched_csv_rows)}")
+
+
 
     def generate_osm_file(self, tree_nodes, coordinate_source='csv'):
         with open(self.output_osm_file_path, 'w', encoding='utf-8') as osm_file:
             osm_file.write('<?xml version="1.0" encoding="UTF-8"?>\n')
             osm_file.write('<osm version="0.6" generator="osmium/1.14">\n')
 
-            # Write nodes from matching CSV data
+            processed_nodes = set()
+
             for _, row in self.matched_data.iterrows():
                 node_id = row['Node_ID']
+
+                # Check if the node has already been processed
+                if node_id in processed_nodes:
+                    continue
+
+                processed_nodes.add(node_id)
 
                 if coordinate_source == 'csv':
                     lat, lon = self.extract_lat_lon(self.csv_data.loc[row['CSV_Row_Index'], 'geom'])
@@ -168,6 +201,16 @@ class OSMTreeMatcher:
             osm_file.write('</osm>\n')
             print(f"OSM file generated and saved to {self.output_osm_file_path}")
 
+    def generate_csv_file(self):
+       
+        unique_matched_data = self.matched_data.drop_duplicates(subset='Node_ID', keep='first')
+
+       
+        unique_matched_data.to_csv(self.output_csv_file_path, columns=['Node_ID', 'Numident'], index=False)
+
+        print(f"CSV file generated and saved to {self.output_csv_file_path}")
+
+
 if __name__ == "__main__":
     # Specify the paths to the PBF and CSV files
     pbf_path = 'brussels_capital_region.pbf'
@@ -189,7 +232,7 @@ if __name__ == "__main__":
     else:
         threshold_meters = 0.2
 
-    # Prompt the user for the coordinate source
+    # Prompt the user for the coordinate source for the .osm file generation
     coordinate_source = input("Enter the coordinate source for the generation of the osm file (csv/pbf): ").lower()
     if coordinate_source not in ['csv', 'pbf']:
         print("Invalid coordinate source. Please enter 'csv' or 'pbf'.")
@@ -212,3 +255,8 @@ if __name__ == "__main__":
 
     # Generate OSM file with coordinates from the specified source
     tree_matcher.generate_osm_file(tree_nodes, coordinate_source=coordinate_source)
+
+    # Generate CSV file
+
+    tree_matcher.match_trees(tree_nodes)
+    tree_matcher.generate_csv_file()
