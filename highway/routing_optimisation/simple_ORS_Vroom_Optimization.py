@@ -185,8 +185,8 @@ delivery_map = DeliveryMap(center=[50.8467, 4.3524], zoom=10)
 delivery_map.load_deliveries_data('input.csv') #format of csv is ID,Lon,Lat,Open_From,Open_To,Needed_Amount #### MAXIMUM 58 entry if using API
 delivery_map.add_delivery_markers()
 delivery_map.add_depot_marker(depot_location=[50.84263, 4.36264])
-delivery_map.setup_vehicles(num_vehicles=3, depot_location=[50.84263, 4.36264],
-                             capacity=9999, time_window=[1553241600, 1553284800])
+delivery_map.setup_vehicles(num_vehicles=1, depot_location=[50.84263, 4.36264],
+                             capacity=9999, time_window=[1553241600, 3944838000])
 delivery_map.setup_deliveries(service_time=0) #default 0
 delivery_map.calculate_optimal_route(api_key='MY_API_KEY') ########### Replace by your Openrouteservice API 
 delivery_map.add_routes_to_map()
