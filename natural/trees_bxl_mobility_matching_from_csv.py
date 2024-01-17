@@ -1,5 +1,6 @@
 #Compare trees data between OSM and 
-## http://data-mobility.irisnet.be/fr/info/trees/ 
+## http://data-mobility.irisnet.be/fr/info/trees/
+### Purpose of this script is to find trees in OSM that have incorrect circumference and matching them with opendata to fix this.
 ### Use csv lat/lon
 
 # Automatic download : 
@@ -104,7 +105,7 @@ class OSMTreeMatcher:
                 circumference = tags.get('circumference')
 
                 try:
-                    if tags.get('natural') == 'tree' and circumference is not None and float(circumference) > 100:  ##### Adapt here the min circumference to check)
+                    if tags.get('natural') == 'tree' and circumference is not None and float(circumference) > 5:  ##### Adapt here the min circumference to check)
                         additional_tags = {key: value for key, value in tags.items() if key != 'natural' and key != 'circumference'}
                         self.tree_nodes[node_id] = {
                             'node_id': node_id,
@@ -196,6 +197,7 @@ class OSMTreeMatcher:
                 osm_file.write(f'    <tag k="circumference" v="{circumference_m}" />\n')
                 osm_file.write(f'    <tag k="height" v="{self.csv_data.loc[row["CSV_Row_Index"], "hauteur"]}" />\n')
                 osm_file.write(f'    <tag k="species" v="{self.csv_data.loc[row["CSV_Row_Index"], "essence"]}" />\n')
+                osm_file.write(f'    <tag k="note" v="{self.csv_data.loc[row["CSV_Row_Index"], "hauteur"]}" />\n')  #used to simplify conflation process when height in opendata has changed beetween versions
                 osm_file.write('  </node>\n')
 
             osm_file.write('</osm>\n')
