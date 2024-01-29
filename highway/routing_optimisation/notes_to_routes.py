@@ -11,7 +11,7 @@ import time
 class OpenStreetMapAPI:
     def __init__(self, bbox):
         self.bbox = bbox
-        self.url = f'https://api.openstreetmap.org/api/0.6/notes.json?bbox={self.bbox[1]},{self.bbox[0]},{self.bbox[3]},{self.bbox[2]}&limit=250closed=false'
+        self.url = f'https://api.openstreetmap.org/api/0.6/notes.json?bbox={self.bbox[1]},{self.bbox[0]},{self.bbox[3]},{self.bbox[2]}&limit=250&closed=false'
         self.data = None
 
     def fetch_data(self):
