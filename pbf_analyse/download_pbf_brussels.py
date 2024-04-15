@@ -3,7 +3,7 @@ import requests
 from datetime import datetime
 import os
 
-url = "https://osmtoday.com/europe/belgium/brussels_capital_region.pbf"
+url = "http://download.openstreetmap.fr/extracts/europe/belgium/brussels_capital_region-latest.osm.pbf"
 r = requests.get(url)
 current_date = datetime.now().strftime("%d_%m_%Y")
 os.makedirs("history", exist_ok=True)
