@@ -10,7 +10,7 @@ Some python script to analyse OpenstreetMap Belgium data.
 
 
 For Osmium : 
-Sub area Excract for Belgium can be found here : https://osmtoday.com/europe/belgium.html
+Sub area Excract for Belgium can be found here : http://download.openstreetmap.fr/extracts/europe/belgium/
 
 
 
