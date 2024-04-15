@@ -3,7 +3,8 @@
 ### Purpose of this script is to find trees in OSM that have incorrect circumference and matching them with opendata to fix this.
 ### Use csv lat/lon
 
-# Automatic download : 
+#!pip install osmium
+# Automatic download datas : 
 #import requests
 
 #url = "https://data.mobility.brussels/geoserver/bm_public_space/wfs?service=wfs&version=1.1.0&request=GetFeature&typeName=bm_public_space:trees&outputFormat=csv&srsName=EPSG:4326"
@@ -11,7 +12,7 @@
 #with open("trees.csv", "wb") as f:
 #    f.write(r.content)
 
-#url = "https://osmtoday.com/europe/belgium/brussels_capital_region.pbf"
+#url = "http://download.openstreetmap.fr/extracts/europe/belgium/brussels_capital_region-latest.osm.pbf"
 #r = requests.get(url)
 #with open("brussels_capital_region.pbf", "wb") as f:
 #    f.write(r.content)
@@ -38,10 +39,11 @@ def haversine_distance(coord1, coord2):
 
 
 class Node:
-    def __init__(self, node_id, location, tags):
+    def __init__(self, node_id, location, tags, version):
         self.node_id = node_id
         self.location = location
         self.tags = tags
+        self.version = version
 
 class NodeCacheHandler(o.SimpleHandler):
     def __init__(self):
@@ -51,10 +53,10 @@ class NodeCacheHandler(o.SimpleHandler):
     def node(self, n):
         if n.location.valid():
             node_location = (n.location.lat, n.location.lon)
-            self.node_cache[n.id] = Node(n.id, node_location, dict(n.tags))
+            self.node_cache[n.id] = Node(n.id, node_location, dict(n.tags), n.version)
 
 class OSMTreeMatcher:
-    def __init__(self, pbf_file_path, csv_file_path, output_csv_file_path, output_osm_file_path, threshold_meters=2, max_tree_nodes=None):
+    def __init__(self, pbf_file_path, csv_file_path, output_csv_file_path, output_osm_file_path, threshold_meters=0.2, max_tree_nodes=None):
         self.pbf_file_path = pbf_file_path
         self.csv_file_path = csv_file_path
         self.output_csv_file_path = output_csv_file_path
@@ -102,20 +104,22 @@ class OSMTreeMatcher:
             if isinstance(location, tuple) and len(location) == 2:
                 lat, lon = location
                 tags = node_info.tags
+                version = node_info.version  # Get the version from the OSM object
                 circumference = tags.get('circumference')
 
                 try:
-                    if tags.get('natural') == 'tree' and circumference is not None and float(circumference) > 5:  ##### Adapt here the min circumference to check)
+                    if tags.get('natural') == 'tree' and circumference is not None and float(circumference) > 7:  ##### Adapt here the min circumference to check)
                         additional_tags = {key: value for key, value in tags.items() if key != 'natural' and key != 'circumference'}
                         self.tree_nodes[node_id] = {
                             'node_id': node_id,
                             'location': location,
-                            'additional_tags': additional_tags
+                            'additional_tags': additional_tags,
+                            'version': version  # Store the version in the dictionary
                         }
 
-                        # Print information for the first 10 tree nodes
+                        # Print information for the first 10 tree nodes (debug)
                         if tree_counter < 10:
-                            #print(f"Tree Node ID: {node_id}, Location: {location}, Additional Tags: {additional_tags}")
+                            print(f"Tree Node ID: {node_id}, Location: {location}, version: {node_info.version}, Additional Tags: {additional_tags}")
                             tree_counter += 1
 
                         if self.max_tree_nodes is not None and len(self.tree_nodes) >= self.max_tree_nodes:
@@ -161,8 +165,6 @@ class OSMTreeMatcher:
 
         #print(f"Number of CSV rows analyzed to have the match : {len(matched_csv_rows)}")
 
-
-
     def generate_osm_file(self, tree_nodes, coordinate_source='csv'):
         with open(self.output_osm_file_path, 'w', encoding='utf-8') as osm_file:
             osm_file.write('<?xml version="1.0" encoding="UTF-8"?>\n')
@@ -181,6 +183,7 @@ class OSMTreeMatcher:
 
                 if coordinate_source == 'csv':
                     lat, lon = self.extract_lat_lon(self.csv_data.loc[row['CSV_Row_Index'], 'geom'])
+                    version = tree_nodes[node_id]['version']  
                 elif coordinate_source == 'pbf':
                     if node_id in tree_nodes:
                         lat, lon = tree_nodes[node_id]['location']
@@ -192,22 +195,22 @@ class OSMTreeMatcher:
 
                 circumference_m = float(row['Circumference']) / 100.0
 
-                osm_file.write(f'  <node id="{node_id}" lat="{lat}" lon="{lon}" version="1">\n')
+                osm_file.write(f'  <node id="{node_id}" action="modify" lat="{lat}" lon="{lon}" version="{version}">\n')
                 osm_file.write('    <tag k="natural" v="tree" />\n')
                 osm_file.write(f'    <tag k="circumference" v="{circumference_m}" />\n')
                 osm_file.write(f'    <tag k="height" v="{self.csv_data.loc[row["CSV_Row_Index"], "hauteur"]}" />\n')
                 osm_file.write(f'    <tag k="species" v="{self.csv_data.loc[row["CSV_Row_Index"], "essence"]}" />\n')
-                osm_file.write(f'    <tag k="note" v="{self.csv_data.loc[row["CSV_Row_Index"], "hauteur"]}" />\n')  #used to simplify conflation process when height in opendata has changed beetween versions
+                #osm_file.write(f'    <tag k="note" v="{self.csv_data.loc[row["CSV_Row_Index"], "hauteur"]}" />\n')
                 osm_file.write('  </node>\n')
 
             osm_file.write('</osm>\n')
             print(f"OSM file generated and saved to {self.output_osm_file_path}")
 
     def generate_csv_file(self):
-       
+
         unique_matched_data = self.matched_data.drop_duplicates(subset='Node_ID', keep='first')
 
-       
+
         unique_matched_data.to_csv(self.output_csv_file_path, columns=['Node_ID', 'Numident'], index=False)
 
         print(f"CSV file generated and saved to {self.output_csv_file_path}")
@@ -259,6 +262,4 @@ if __name__ == "__main__":
     tree_matcher.generate_osm_file(tree_nodes, coordinate_source=coordinate_source)
 
     # Generate CSV file
-
-    tree_matcher.match_trees(tree_nodes)
     tree_matcher.generate_csv_file()
