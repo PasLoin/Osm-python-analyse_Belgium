@@ -11,7 +11,6 @@ import shutil
 import zipfile
 from fractions import Fraction
 from PIL import Image
-from PIL.ExifTags import TAGS, GPSTAGS
 import piexif
 import numpy as np
 
@@ -19,23 +18,20 @@ import numpy as np
 def get_gps_from_exif(img_path):
     try:
         img = Image.open(img_path)
-        exif_data = img.getexif()  # API publique, remplace _getexif()
+        exif_data = img.getexif()
         if not exif_data:
             return None
 
-        gps_info = {}
-        for tag, value in exif_data.items():
-            if TAGS.get(tag) == 'GPSInfo':
-                for t in value:
-                    gps_info[GPSTAGS.get(t)] = value[t]
+        # Tag 34853 = GPSInfo IFD — use get_ifd() instead of iterating raw value
+        gps_info = exif_data.get_ifd(34853)
 
         if not gps_info:
             return None
 
-        lat     = gps_info.get('GPSLatitude')
-        lat_ref = gps_info.get('GPSLatitudeRef')
-        lon     = gps_info.get('GPSLongitude')
-        lon_ref = gps_info.get('GPSLongitudeRef')
+        lat     = gps_info.get(2)   # GPSLatitude
+        lat_ref = gps_info.get(1)   # GPSLatitudeRef
+        lon     = gps_info.get(4)   # GPSLongitude
+        lon_ref = gps_info.get(3)   # GPSLongitudeRef
 
         if not lat or not lon:
             return None
@@ -68,7 +64,6 @@ def deg_to_dms_rational(deg):
     m = int(m_frac)
     s_frac = (m_frac - m) * 60
 
-    # On exprime s comme rationnel (numérateur, dénominateur)
     s_rational = s_frac.limit_denominator(10_000)
     return (
         (d, 1),
@@ -95,8 +90,8 @@ def interpolate_coords(start, end, n):
 
 
 # === CONFIGURATION ===
-input_folder  = "/content/photos"
-output_folder = "/content/photos_corrigees"
+input_folder  = "./to-snap"
+output_folder = "./to-snap/photos_corrigees"
 os.makedirs(output_folder, exist_ok=True)
 
 # Extensions acceptées (insensible à la casse)
