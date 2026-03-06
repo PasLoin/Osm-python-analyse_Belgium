@@ -11,6 +11,7 @@ import time
 import zipfile
 from fractions import Fraction
 
+import subprocess
 import numpy as np
 import requests
 from PIL import Image
@@ -27,7 +28,7 @@ OVERPASS_RETRIES   = 3
 OVERPASS_DELAY     = 5   # secondes entre retries
 
 # Liste ordonnée des way IDs OpenStreetMap
-way_ids = [791373002, 31275936, 14622087, 442601787, 31275937, 351522303, 408211682, 791336247]
+way_ids = [14622087, 442601787, 31275937, 351522303, 408211682, 791336247]
 
 os.makedirs(output_folder, exist_ok=True)
 
@@ -209,16 +210,20 @@ def deg_to_dms_rational(deg):
 
 
 def update_exif_no_recompress(src_path, dst_path, lat, lon):
-    """Copie le fichier source et injecte les nouvelles coordonnées sans recompresser."""
     shutil.copy2(src_path, dst_path)
-    exif_dict        = piexif.load(dst_path)
-    exif_dict['GPS'] = {
-        piexif.GPSIFD.GPSLatitudeRef:  b'N' if lat >= 0 else b'S',
-        piexif.GPSIFD.GPSLatitude:     deg_to_dms_rational(lat),
-        piexif.GPSIFD.GPSLongitudeRef: b'E' if lon >= 0 else b'W',
-        piexif.GPSIFD.GPSLongitude:    deg_to_dms_rational(lon),
-    }
-    piexif.insert(piexif.dump(exif_dict), dst_path)
+
+    lat_ref = 'N' if lat >= 0 else 'S'
+    lon_ref = 'E' if lon >= 0 else 'W'
+
+    subprocess.run([
+        "exiftool",
+        "-overwrite_original",
+        f"-GPSLatitude={abs(lat)}",
+        f"-GPSLatitudeRef={lat_ref}",
+        f"-GPSLongitude={abs(lon)}",
+        f"-GPSLongitudeRef={lon_ref}",
+        dst_path
+    ], check=True, capture_output=True)
 
 
 # === TRAITEMENT PRINCIPAL ====================================
