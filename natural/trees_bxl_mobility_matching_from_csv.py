@@ -1,45 +1,39 @@
 #Compare trees data between OSM and 
-## http://data-mobility.irisnet.be/fr/info/trees/
+## https://data.mobility.brussels/fr/info/trees/
 ### Purpose of this script is to find trees in OSM that have incorrect circumference and matching them with opendata to fix this.
 ### Use csv lat/lon
 
 #!pip install osmium
 # Automatic download datas : 
-#import requests
+import requests
 
-#url = "https://data.mobility.brussels/geoserver/bm_public_space/wfs?service=wfs&version=1.1.0&request=GetFeature&typeName=bm_public_space:trees&outputFormat=csv&srsName=EPSG:4326"
-#r = requests.get(url)
-#with open("trees.csv", "wb") as f:
-#    f.write(r.content)
+url = "https://data.mobility.brussels/geoserver/bm_public_space/wfs?service=wfs&version=1.1.0&request=GetFeature&typeName=bm_public_space:trees&outputFormat=csv&srsName=EPSG:4326"
+r = requests.get(url)
+with open("trees.csv", "wb") as f:
+    f.write(r.content)
 
-#url = "http://download.openstreetmap.fr/extracts/europe/belgium/brussels_capital_region-latest.osm.pbf"
-#r = requests.get(url)
-#with open("brussels_capital_region.pbf", "wb") as f:
-#    f.write(r.content)
+url = "http://download.openstreetmap.fr/extracts/europe/belgium/brussels_capital_region-latest.osm.pbf"
+r = requests.get(url)
+with open("brussels_capital_region.pbf", "wb") as f:
+    f.write(r.content)
 
 #!pip install rtree
 
 import pandas as pd
 import osmium as o
+import xml.sax.saxutils as saxutils
 from math import radians, sin, cos, sqrt, atan2
 from rtree import index
 
 
 def haversine_distance(coord1, coord2):
-    """
-    Calculate the great-circle distance between two points on the Earth (specified in decimal degrees).
-    Returns distance in kilometers.
-    """
-    R = 6371.0  # Earth radius in kilometers
-
+    R = 6371.0
     lat1, lon1 = map(radians, coord1)
     lat2, lon2 = map(radians, coord2)
-
     dlat = lat2 - lat1
     dlon = lon2 - lon1
     a = sin(dlat / 2)**2 + cos(lat1) * cos(lat2) * sin(dlon / 2)**2
     c = 2 * atan2(sqrt(a), sqrt(1 - a))
-
     return R * c
 
 
@@ -70,9 +64,9 @@ class OSMTreeMatcher:
         self.osm_out = osm_out
         self.csv_out = csv_out
         self.threshold_m = threshold_meters
-        self.threshold_km = threshold_meters / 1000.0  # convert meters to km
+        self.threshold_km = threshold_meters / 1000.0
         self.max_tree_nodes = max_tree_nodes
-        
+
         self.handler = NodeCacheHandler()
         self.csv_data = None
         self.tree_nodes = {}
@@ -81,43 +75,62 @@ class OSMTreeMatcher:
             'Node_ID', 'CSV_index', 'Distance_km', 'Numident', 'Circ_cm'
         ])
 
+    @staticmethod
+    def escape_xml(value):
+        """Échappe les caractères spéciaux XML et supprime les caractères de contrôle."""
+        if pd.isna(value):
+            return ''
+        cleaned = ' '.join(str(value).splitlines())
+        return saxutils.escape(cleaned)
+
+    @staticmethod
+    def parse_species(essence):
+        """Sépare l'espèce du cultivar si présent entre apostrophes.
+        Ex: Liquidambar styraciflua 'Slender silhouette'
+            -> species = 'Liquidambar styraciflua'
+            -> cultivar = 'Slender silhouette'
+        """
+        if pd.isna(essence):
+            return None, None
+        s = str(essence).strip()
+        if "'" in s:
+            parts = s.split("'", 1)
+            species = parts[0].strip()
+            cultivar = parts[1].rstrip("'").strip()
+            return species, cultivar
+        return s, None
+
     def read_osm(self):
-        """Read OSM PBF and cache nodes."""
         reader = o.io.Reader(self.pbf_path)
         o.apply(reader, self.handler)
         reader.close()
 
     def read_csv(self):
-        cols = ['FID','gid','geom','numident','annee_plant','circumference','commune',
-                'couverture','crown_diam','essence','hauteur','multitronc',
-                'structure_couronne','status','espace_de_plantation','distribution','voirie']
+        cols = ['FID', 'gid', 'geom', 'numident', 'annee_plant', 'circumference', 'commune',
+                'couverture', 'crown_diam', 'essence', 'hauteur', 'multitronc',
+                'structure_couronne', 'status', 'espace_de_plantation', 'distribution', 'voirie']
         dtype = {'numident': str, 'crown_diam': str}
         self.csv_data = pd.read_csv(self.csv_path, names=cols, skiprows=1, dtype=dtype, decimal=',')
 
     @staticmethod
     def extract_lat_lon(geom_str):
-        """
-        Extract latitude, longitude from 'POINT(lon lat)' string.
-        """
         lon, lat = map(float, geom_str.split('(')[-1].split(')')[0].split())
         return lat, lon
 
     def search_pbf_nodes(self):
-        """Filter OSM nodes tagged as trees and cache them (no circumference check)."""
         counter = 0
         direction = input("Sorting direction (asc/desc)? [desc]: ").lower() or 'desc'
-        if direction not in ('asc','desc'):
+        if direction not in ('asc', 'desc'):
             direction = 'desc'
 
         sorted_items = sorted(self.handler.node_cache.items(), key=lambda x: x[0],
-                              reverse=(direction=='desc'))
+                              reverse=(direction == 'desc'))
 
         for nid, node in sorted_items:
             if isinstance(node.location, tuple) and node.tags.get('natural') == 'tree':
-                # Add all tree nodes without filtering by circumference
                 self.tree_nodes[nid] = {
                     'location': node.location,
-                    'tags': {k:v for k,v in node.tags.items() if k != 'natural'},
+                    'tags': {k: v for k, v in node.tags.items() if k != 'natural'},
                     'version': node.version
                 }
                 if counter < 10:
@@ -133,7 +146,6 @@ class OSMTreeMatcher:
         self.build_rtree_index()
 
     def build_rtree_index(self):
-        """Construct an R-tree index over tree node locations."""
         prop = index.Property()
         prop.dimension = 2
         idx = index.Index(properties=prop)
@@ -143,15 +155,13 @@ class OSMTreeMatcher:
         self.spatial_index = idx
 
     def match_trees(self):
-        """Match CSV trees to nearest OSM tree nodes within threshold."""
         if not self.tree_nodes or self.spatial_index is None:
             print("Pas d'index spatial disponible. Veuillez exécuter search_pbf_nodes() avec des résultats valides.")
             return
 
         matches = []
         seen = set()
-
-        deg_buffer = self.threshold_km / 111.32  # approx km to degrees
+        deg_buffer = self.threshold_km / 111.32
 
         for i, row in self.csv_data.iterrows():
             if row['status'] != 'en vie' or row['circumference'] == '0':
@@ -188,38 +198,94 @@ class OSMTreeMatcher:
         ])
         print(f"Matched rows: {len(seen)}")
 
-    def generate_outputs(self, coord_source='csv'):
-        """Generate .osm and .csv of matched data."""
+    def write_species_tags(self, f, essence):
+        """Écrit les tags species et taxon:cultivar selon la valeur d'essence."""
+        species, cultivar = self.parse_species(essence)
+        if species:
+            f.write(f'    <tag k="species" v="{self.escape_xml(species)}" />\n')
+        if cultivar:
+            f.write(f'    <tag k="taxon:cultivar" v="{self.escape_xml(cultivar)}" />\n')
+
+    def generate_outputs(self, coord_source='csv', unmatched_out='new_trees.osm'):
         if self.matched_data.empty:
             print("Aucune correspondance trouvée. Fichiers de sortie non générés.")
             return
 
+        # CSV des matchs
         unique = self.matched_data.drop_duplicates('Node_ID')
         unique[['Node_ID', 'Numident']].to_csv(self.csv_out, index=False)
         print(f"CSV saved: {self.csv_out}")
 
+        # OSM des arbres matchés (modification)
         with open(self.osm_out, 'w', encoding='utf-8') as f:
             f.write('<?xml version="1.0" encoding="UTF-8"?>\n<osm version="0.6">\n')
-            seen_nodes = set()
-            for _, r in self.matched_data.iterrows():
-                nid = r['Node_ID']
-                if nid in seen_nodes:
-                    continue
-                seen_nodes.add(nid)
-                if coord_source == 'csv':
-                    lat, lon = self.extract_lat_lon(self.csv_data.loc[r['CSV_index'], 'geom'])
-                else:
-                    lat, lon = self.tree_nodes[nid]['location']
-                ver = self.tree_nodes[nid]['version']
-                circ_m = float(r['Circ_cm']) / 100.0
-                f.write(f'  <node id="{nid}" action="modify" lat="{lat}" lon="{lon}" version="{ver}">\n')
-                f.write('    <tag k="natural" v="tree" />\n')
-                f.write(f'    <tag k="circumference" v="{circ_m}" />\n')
-                f.write(f'    <tag k="height" v="{self.csv_data.loc[r["CSV_index"], "hauteur"]}" />\n')
-                f.write(f'    <tag k="species" v="{self.csv_data.loc[r["CSV_index"], "essence"]}" />\n')
-                f.write('  </node>\n')
-            f.write('</osm>')
+            try:
+                seen_nodes = set()
+                for _, r in self.matched_data.iterrows():
+                    try:
+                        nid = r['Node_ID']
+                        if nid in seen_nodes:
+                            continue
+                        seen_nodes.add(nid)
+                        if coord_source == 'csv':
+                            lat, lon = self.extract_lat_lon(self.csv_data.loc[r['CSV_index'], 'geom'])
+                        else:
+                            lat, lon = self.tree_nodes[nid]['location']
+                        ver = self.tree_nodes[nid]['version']
+                        circ_m = float(r['Circ_cm']) / 100.0
+                        f.write(f'  <node id="{nid}" action="modify" lat="{lat}" lon="{lon}" version="{ver}">\n')
+                        f.write('    <tag k="natural" v="tree" />\n')
+                        f.write(f'    <tag k="circumference" v="{circ_m}" />\n')
+                        if pd.notna(self.csv_data.loc[r['CSV_index'], 'hauteur']):
+                            f.write(f'    <tag k="height" v="{self.escape_xml(self.csv_data.loc[r["CSV_index"], "hauteur"])}" />\n')
+                        self.write_species_tags(f, self.csv_data.loc[r['CSV_index'], 'essence'])
+                        f.write('  </node>\n')
+                    except Exception as e:
+                        print(f"[SKIP matched] index {r['CSV_index']} — {e}")
+                        continue
+            finally:
+                f.write('</osm>')
         print(f"OSM saved: {self.osm_out}")
+
+        # OSM des arbres non matchés (création)
+        self.generate_unmatched_osm(unmatched_out)
+
+    def generate_unmatched_osm(self, unmatched_out='new_trees.osm'):
+        matched_csv_indices = set(self.matched_data['CSV_index'].tolist())
+
+        with open(unmatched_out, 'w', encoding='utf-8') as f:
+            f.write('<?xml version="1.0" encoding="UTF-8"?>\n<osm version="0.6">\n')
+            new_id = -1
+            count = 0
+            try:
+                for i, row in self.csv_data.iterrows():
+                    try:
+                        if row['status'] != 'en vie' or row['circumference'] == '0':
+                            continue
+                        if i in matched_csv_indices:
+                            continue
+
+                        lat, lon = self.extract_lat_lon(row['geom'])
+                        circ_m = float(row['circumference']) / 100.0
+
+                        f.write(f'  <node id="{new_id}" action="create" lat="{lat}" lon="{lon}" version="0">\n')
+                        f.write('    <tag k="natural" v="tree" />\n')
+                        f.write(f'    <tag k="circumference" v="{circ_m}" />\n')
+                        if pd.notna(row['hauteur']):
+                            f.write(f'    <tag k="height" v="{self.escape_xml(row["hauteur"])}" />\n')
+                        self.write_species_tags(f, row['essence'])
+                        f.write(f'    <tag k="ref" v="{self.escape_xml(row["numident"])}" />\n')
+                        f.write('  </node>\n')
+
+                        new_id -= 1
+                        count += 1
+                    except Exception as e:
+                        print(f"[SKIP unmatched] index {i} — {e}")
+                        continue
+            finally:
+                f.write('</osm>')
+
+        print(f"Unmatched trees saved: {unmatched_out} ({count} nodes)")
 
 
 if __name__ == '__main__':
@@ -227,6 +293,7 @@ if __name__ == '__main__':
     csvf = 'trees.csv'
     out_csv = 'matched_data.csv'
     out_osm = 'matched_data.osm'
+    out_unmatched = 'new_trees.osm'
 
     max_nodes = input("Max tree nodes to load? (enter for no limit): ")
     max_nodes = int(max_nodes) if max_nodes.strip() else None
@@ -243,4 +310,4 @@ if __name__ == '__main__':
     matcher.search_pbf_nodes()
     matcher.read_csv()
     matcher.match_trees()
-    matcher.generate_outputs(coord_source=coord_src)
+    matcher.generate_outputs(coord_source=coord_src, unmatched_out=out_unmatched)
