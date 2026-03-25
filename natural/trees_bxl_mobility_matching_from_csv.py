@@ -71,6 +71,7 @@ class OSMTreeMatcher:
         self.csv_data = None
         self.tree_nodes = {}
         self.spatial_index = None
+        self.enrichment = {}
         self.matched_data = pd.DataFrame(columns=[
             'Node_ID', 'CSV_index', 'Distance_km', 'Numident', 'Circ_cm'
         ])
@@ -85,7 +86,8 @@ class OSMTreeMatcher:
 
     @staticmethod
     def parse_species(essence):
-        """Sépare l'espèce du cultivar si présent entre apostrophes.
+        """
+        Sépare l'espèce du cultivar si présent entre apostrophes.
         Ex: Liquidambar styraciflua 'Slender silhouette'
             -> species = 'Liquidambar styraciflua'
             -> cultivar = 'Slender silhouette'
@@ -99,6 +101,21 @@ class OSMTreeMatcher:
             cultivar = parts[1].rstrip("'").strip()
             return species, cultivar
         return s, None
+
+    def load_enrichment(self, enrichment_path='species_enrichment.csv'):
+        """Charge le CSV d'enrichissement espèce -> tags botaniques."""
+        try:
+            df = pd.read_csv(enrichment_path, dtype=str).fillna('')
+            for _, row in df.iterrows():
+                self.enrichment[row['species'].strip()] = {
+                    'genus':            row.get('genus', ''),
+                    'species:wikidata': row.get('species:wikidata', ''),
+                    'leaf_cycle':       row.get('leaf_cycle', ''),
+                    'leaf_type':        row.get('leaf_type', ''),
+                }
+            print(f"Enrichment loaded: {len(self.enrichment)} species")
+        except FileNotFoundError:
+            print("[WARN] species_enrichment.csv non trouvé, enrichissement ignoré.")
 
     def read_osm(self):
         reader = o.io.Reader(self.pbf_path)
@@ -199,12 +216,23 @@ class OSMTreeMatcher:
         print(f"Matched rows: {len(seen)}")
 
     def write_species_tags(self, f, essence):
-        """Écrit les tags species et taxon:cultivar selon la valeur d'essence."""
+        """Écrit species et taxon:cultivar."""
         species, cultivar = self.parse_species(essence)
         if species:
             f.write(f'    <tag k="species" v="{self.escape_xml(species)}" />\n')
         if cultivar:
             f.write(f'    <tag k="taxon:cultivar" v="{self.escape_xml(cultivar)}" />\n')
+
+    def write_enrichment_tags(self, f, essence):
+        """Écrit genus, species:wikidata, leaf_cycle, leaf_type depuis le CSV d'enrichissement."""
+        if not essence or pd.isna(essence):
+            return
+        species = str(essence).split("'")[0].strip()
+        data = self.enrichment.get(species, {})
+        for key in ('genus', 'species:wikidata', 'leaf_cycle', 'leaf_type'):
+            val = data.get(key, '')
+            if val:
+                f.write(f'    <tag k="{key}" v="{self.escape_xml(val)}" />\n')
 
     def generate_outputs(self, coord_source='csv', unmatched_out='new_trees.osm'):
         if self.matched_data.empty:
@@ -233,12 +261,16 @@ class OSMTreeMatcher:
                             lat, lon = self.tree_nodes[nid]['location']
                         ver = self.tree_nodes[nid]['version']
                         circ_m = float(r['Circ_cm']) / 100.0
+                        essence = self.csv_data.loc[r['CSV_index'], 'essence']
+
                         f.write(f'  <node id="{nid}" action="modify" lat="{lat}" lon="{lon}" version="{ver}">\n')
                         f.write('    <tag k="natural" v="tree" />\n')
                         f.write(f'    <tag k="circumference" v="{circ_m}" />\n')
                         if pd.notna(self.csv_data.loc[r['CSV_index'], 'hauteur']):
                             f.write(f'    <tag k="height" v="{self.escape_xml(self.csv_data.loc[r["CSV_index"], "hauteur"])}" />\n')
-                        self.write_species_tags(f, self.csv_data.loc[r['CSV_index'], 'essence'])
+                        self.write_species_tags(f, essence)
+                        self.write_enrichment_tags(f, essence)
+                        f.write(f'    <tag k="ref" v="{self.escape_xml(self.csv_data.loc[r["CSV_index"], "numident"])}" />\n')
                         f.write('  </node>\n')
                     except Exception as e:
                         print(f"[SKIP matched] index {r['CSV_index']} — {e}")
@@ -267,13 +299,15 @@ class OSMTreeMatcher:
 
                         lat, lon = self.extract_lat_lon(row['geom'])
                         circ_m = float(row['circumference']) / 100.0
+                        essence = row['essence']
 
                         f.write(f'  <node id="{new_id}" action="create" lat="{lat}" lon="{lon}" version="0">\n')
                         f.write('    <tag k="natural" v="tree" />\n')
                         f.write(f'    <tag k="circumference" v="{circ_m}" />\n')
                         if pd.notna(row['hauteur']):
                             f.write(f'    <tag k="height" v="{self.escape_xml(row["hauteur"])}" />\n')
-                        self.write_species_tags(f, row['essence'])
+                        self.write_species_tags(f, essence)
+                        self.write_enrichment_tags(f, essence)
                         f.write(f'    <tag k="ref" v="{self.escape_xml(row["numident"])}" />\n')
                         f.write('  </node>\n')
 
@@ -294,6 +328,7 @@ if __name__ == '__main__':
     out_csv = 'matched_data.csv'
     out_osm = 'matched_data.osm'
     out_unmatched = 'new_trees.osm'
+    enrichment_csv = 'species_enrichment.csv'
 
     max_nodes = input("Max tree nodes to load? (enter for no limit): ")
     max_nodes = int(max_nodes) if max_nodes.strip() else None
@@ -306,8 +341,10 @@ if __name__ == '__main__':
     matcher = OSMTreeMatcher(pbf, csvf, out_osm, out_csv,
                              threshold_meters=thresh,
                              max_tree_nodes=max_nodes)
+    matcher.load_enrichment(enrichment_csv)
     matcher.read_osm()
     matcher.search_pbf_nodes()
     matcher.read_csv()
     matcher.match_trees()
     matcher.generate_outputs(coord_source=coord_src, unmatched_out=out_unmatched)
+
