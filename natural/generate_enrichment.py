@@ -1,8 +1,10 @@
 # generate_enrichment.py
 ## Add additional info on trees , use in combinaison with trees_bxl_mobility_matching_from_csv.py
-### Run this script before.
+### Run this script first.
+
 import pandas as pd
 import requests
+import re
 import time
 
 SPARQL_ENDPOINT = "https://query.wikidata.org/sparql"
@@ -19,22 +21,17 @@ NEEDLELEAVED_GENERA = {
     'Sequoia', 'Thuja', 'Cryptomeria', 'Metasequoia',
 }
 
-# Overrides espèce-spécifiques — priorité absolue sur tout le reste
 SPECIES_LEAF_CYCLE_OVERRIDE = {
-    # Magnolia : genre mixte deciduous/evergreen
-    'Magnolia grandiflora':     'evergreen',
-    'Magnolia virginiana':      'semi_evergreen',
-    # Quercus persistants
-    'Quercus ilex':             'evergreen',
-    'Quercus suber':            'evergreen',
-    'Quercus coccifera':        'evergreen',
-    # Prunus persistants
-    'Prunus laurocerasus':      'evergreen',
-    'Prunus lusitanica':        'evergreen',
+    'Magnolia grandiflora':  'evergreen',
+    'Magnolia virginiana':   'semi_evergreen',
+    'Quercus ilex':          'evergreen',
+    'Quercus suber':         'evergreen',
+    'Quercus coccifera':     'evergreen',
+    'Prunus laurocerasus':   'evergreen',
+    'Prunus lusitanica':     'evergreen',
 }
 
 GENUS_LEAF_CYCLE = {
-    # Deciduous
     'Acer': 'deciduous', 'Aesculus': 'deciduous', 'Ailanthus': 'deciduous',
     'Alnus': 'deciduous', 'Amelanchier': 'deciduous', 'Betula': 'deciduous',
     'Carpinus': 'deciduous', 'Castanea': 'deciduous', 'Catalpa': 'deciduous',
@@ -49,7 +46,6 @@ GENUS_LEAF_CYCLE = {
     'Pyrus': 'deciduous', 'Quercus': 'deciduous', 'Robinia': 'deciduous',
     'Salix': 'deciduous', 'Sophora': 'deciduous', 'Sorbus': 'deciduous',
     'Tilia': 'deciduous', 'Ulmus': 'deciduous', 'Zelkova': 'deciduous',
-    # Evergreen
     'Abies': 'evergreen', 'Araucaria': 'evergreen', 'Buxus': 'evergreen',
     'Cedrus': 'evergreen', 'Chamaecyparis': 'evergreen', 'Cupressus': 'evergreen',
     'Ilex': 'evergreen', 'Juniperus': 'evergreen', 'Picea': 'evergreen',
@@ -81,17 +77,30 @@ for leaf_type, genera in GENUS_LEAF_TYPE.items():
         GENUS_TO_LEAF_TYPE[genus] = leaf_type
 
 
+def normalize_species_name(species):
+    """
+    Remplace le 'x' hybride latin par le signe × (U+00D7) attendu par Wikidata.
+    'Platanus x acerifolia' -> 'Platanus × acerifolia'
+    """
+    return re.sub(r'(?<=[a-zA-Z])\s+x\s+(?=[a-zA-Z])', ' × ', species)
+
+
 def query_wikidata_sparql(species_name):
+    """
+    Utilise wdt:P225 pour récupérer le nom scientifique du genre.
+    Normalise le nom pour gérer les hybrides (× au lieu de x).
+    """
+    normalized = normalize_species_name(species_name)
     query = f"""
-    SELECT ?taxon ?genusLabel ?leafRetention ?genusLeafRetention WHERE {{
-      ?taxon wdt:P225 "{species_name}" .
+    SELECT ?taxon ?genusName ?leafRetention ?genusLeafRetention WHERE {{
+      ?taxon wdt:P225 "{normalized}" .
       OPTIONAL {{
         ?taxon wdt:P171* ?genus .
         ?genus wdt:P105 wd:Q34740 .
+        ?genus wdt:P225 ?genusName .
         OPTIONAL {{ ?genus wdt:P3014 ?genusLeafRetention . }}
       }}
       OPTIONAL {{ ?taxon wdt:P3014 ?leafRetention . }}
-      SERVICE wikibase:label {{ bd:serviceParam wikibase:language "en" . }}
     }}
     LIMIT 1
     """
@@ -108,7 +117,7 @@ def query_wikidata_sparql(species_name):
 
         b = bindings[0]
         qid = b['taxon']['value'].split('/')[-1] if 'taxon' in b else None
-        genus = b['genusLabel']['value'] if 'genusLabel' in b else None
+        genus = b['genusName']['value'] if 'genusName' in b else None
 
         retention_qid = None
         if 'leafRetention' in b:
@@ -132,7 +141,7 @@ def resolve_leaf_cycle(leaf_cycle_sparql, genus, species):
         return leaf_cycle_sparql, 'Wikidata'
     if genus:
         val = GENUS_LEAF_CYCLE.get(genus, '')
-        return val, 'fallback dict' if val else 'manquant'
+        return (val, 'fallback dict') if val else ('', 'manquant')
     return '', 'manquant'
 
 
