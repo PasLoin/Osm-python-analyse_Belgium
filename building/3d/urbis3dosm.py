@@ -309,9 +309,8 @@ def sql_faces_enriched() -> str:
     """
     Faces 2D individuelles avec attributs Z relatifs au sol.
     Joint roof_shape_signals pour propager detected_shape à chaque face.
-    On garde chaque face séparément (pas d'union) pour
+    On garde chaque ROOFSURFACE séparément (pas d'union) pour
     permettre un building:part par face dans OSM.
-    Inclut WALLSURFACE pour inspection / validation des données source.
     """
     return """
         SELECT
@@ -334,7 +333,7 @@ def sql_faces_enriched() -> str:
         JOIN   ground_ref g      ON g.BUSOLID_ID = f.BUSOLID_ID
         JOIN   building_stats s  ON s.BUSOLID_ID = f.BUSOLID_ID
         LEFT JOIN roof_shape_signals r ON r.BUSOLID_ID = f.BUSOLID_ID
-        WHERE  f.TYPE IN ('GROUNDSURFACE', 'ROOFSURFACE', 'WALLSURFACE')
+        WHERE  f.TYPE IN ('GROUNDSURFACE', 'ROOFSURFACE')
     """
 
 
