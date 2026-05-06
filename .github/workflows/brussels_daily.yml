@@ -1,0 +1,40 @@
+name: Daily Brussels PBF Extract
+
+on:
+  schedule:
+    - cron: "30 4 * * *"  
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  extract-brussels:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Install osmium-tool
+        run: sudo apt-get update && sudo apt-get install -y osmium-tool
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+
+      - name: Install Python dependencies
+        run: pip install shapely pyproj
+
+      - name: Run extraction
+        run: python pbf_analyse/extract_brussels_daily.py
+
+      - name: Commit & push
+        run: |
+          git config user.name "actions-user"
+          git config user.email "actions@github.com"
+          git add pbf_analyse/history/Brussels-daily.pbf pbf_analyse/history/state.txt pbf_analyse/history/brussels-boundary.geojson
+          git diff --cached --quiet && echo "No changes" && exit 0
+          git commit -m "Daily Brussels PBF extract – $(date -u +%Y-%m-%d)"
+          git push
