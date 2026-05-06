@@ -120,6 +120,7 @@ def extract_brussels() -> None:
         "--polygon", BOUNDARY_GEOJSON,
         "--strategy", "smart",
         "--overwrite",
+        "--output-format", "pbf",
         "-o", tmp_output,
         BELGIUM_PBF,
     ])
