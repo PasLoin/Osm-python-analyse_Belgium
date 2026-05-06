@@ -1,5 +1,5 @@
 # Brussels-daily.pbf state file
-creation_date=2026-05-06T10:13:08Z
+creation_date=2026-05-06T10:45:54Z
 data_date=2026-05-05T20:21:15Z
 boundary=OSM relation 54094 (Brussels-Capital Region) + 500m buffer
 boundary_source=https://polygons.openstreetmap.fr/get_geojson.py?id=54094&params=0
