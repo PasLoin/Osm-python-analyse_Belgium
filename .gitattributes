@@ -1,0 +1,5 @@
+git add .gitattributes
+git rm --cached pbf_analyse/history/Brussels-daily.pbf
+git add pbf_analyse/history/Brussels-daily.pbf
+git commit -m "Fix binary handling for PBF files"
+git push
