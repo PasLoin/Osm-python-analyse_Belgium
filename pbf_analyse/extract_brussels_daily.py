@@ -128,6 +128,10 @@ def extract_brussels() -> None:
     size_mb = os.path.getsize(BRUSSELS_PBF) / (1024 * 1024)
     print(f"  -> {BRUSSELS_PBF} ({size_mb:.1f} MB)")
 
+    # Validate the PBF is readable
+    print("Validating PBF ...")
+    run(["osmium", "fileinfo", BRUSSELS_PBF])
+
 
 def write_state(data_timestamp: str) -> None:
     """Write state.txt with creation and data timestamps."""
