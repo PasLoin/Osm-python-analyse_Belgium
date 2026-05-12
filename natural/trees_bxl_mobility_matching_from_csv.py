@@ -146,13 +146,6 @@ class OSMTreeMatcher:
 
         for nid, node in sorted_items:
             if isinstance(node.location, tuple) and node.tags.get('natural') == 'tree':
-                # Filtre sur la clé ref
-                has_ref = 'ref' in node.tags
-                if self.ref_filter == 'no_ref' and has_ref:
-                    continue
-                if self.ref_filter == 'with_ref' and not has_ref:
-                    continue
-
                 self.tree_nodes[nid] = {
                     'location': node.location,
                     'tags': {k: v for k, v in node.tags.items() if k != 'natural'},
@@ -164,7 +157,7 @@ class OSMTreeMatcher:
                 if self.max_tree_nodes and len(self.tree_nodes) >= self.max_tree_nodes:
                     break
 
-        print(f"Total trees indexed: {len(self.tree_nodes)} (ref_filter={self.ref_filter})")
+        print(f"Total trees indexed: {len(self.tree_nodes)}")
         if not self.tree_nodes:
             print("Aucun arbre OSM trouvé. Arrêt du processus de matching.")
             return
@@ -263,6 +256,15 @@ class OSMTreeMatcher:
                         if nid in seen_nodes:
                             continue
                         seen_nodes.add(nid)
+
+                        # Filtre sur la clé ref dans les tags OSM existants
+                        osm_tags = self.tree_nodes[nid]['tags']
+                        has_ref = 'ref' in osm_tags
+                        if self.ref_filter == 'no_ref' and has_ref:
+                            continue
+                        if self.ref_filter == 'with_ref' and not has_ref:
+                            continue
+
                         if coord_source == 'csv':
                             lat, lon = self.extract_lat_lon(self.csv_data.loc[r['CSV_index'], 'geom'])
                         else:
