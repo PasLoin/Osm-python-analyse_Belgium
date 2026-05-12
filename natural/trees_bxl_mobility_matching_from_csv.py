@@ -58,7 +58,7 @@ class NodeCacheHandler(o.SimpleHandler):
 
 class OSMTreeMatcher:
     def __init__(self, pbf_path, csv_path, osm_out, csv_out,
-                 threshold_meters=0.2, max_tree_nodes=None):
+                 threshold_meters=0.2, max_tree_nodes=None, ref_filter='all'):
         self.pbf_path = pbf_path
         self.csv_path = csv_path
         self.osm_out = osm_out
@@ -66,6 +66,7 @@ class OSMTreeMatcher:
         self.threshold_m = threshold_meters
         self.threshold_km = threshold_meters / 1000.0
         self.max_tree_nodes = max_tree_nodes
+        self.ref_filter = ref_filter  # 'all', 'no_ref', 'with_ref'
 
         self.handler = NodeCacheHandler()
         self.csv_data = None
@@ -145,6 +146,13 @@ class OSMTreeMatcher:
 
         for nid, node in sorted_items:
             if isinstance(node.location, tuple) and node.tags.get('natural') == 'tree':
+                # Filtre sur la clé ref
+                has_ref = 'ref' in node.tags
+                if self.ref_filter == 'no_ref' and has_ref:
+                    continue
+                if self.ref_filter == 'with_ref' and not has_ref:
+                    continue
+
                 self.tree_nodes[nid] = {
                     'location': node.location,
                     'tags': {k: v for k, v in node.tags.items() if k != 'natural'},
@@ -156,7 +164,7 @@ class OSMTreeMatcher:
                 if self.max_tree_nodes and len(self.tree_nodes) >= self.max_tree_nodes:
                     break
 
-        print(f"Total trees indexed: {len(self.tree_nodes)}")
+        print(f"Total trees indexed: {len(self.tree_nodes)} (ref_filter={self.ref_filter})")
         if not self.tree_nodes:
             print("Aucun arbre OSM trouvé. Arrêt du processus de matching.")
             return
@@ -338,13 +346,22 @@ if __name__ == '__main__':
 
     coord_src = input("Coordinates from csv or pbf? [csv]: ").lower() or 'csv'
 
+    print("\nRef filter for matched trees:")
+    print("  1 — All trees (default)")
+    print("  2 — Only trees WITHOUT ref tag in OSM")
+    print("  3 — Only trees WITH ref tag in OSM")
+    ref_choice = input("Choice [1]: ").strip() or '1'
+    ref_filter_map = {'1': 'all', '2': 'no_ref', '3': 'with_ref'}
+    ref_filter = ref_filter_map.get(ref_choice, 'all')
+    print(f"→ ref_filter = {ref_filter}")
+
     matcher = OSMTreeMatcher(pbf, csvf, out_osm, out_csv,
                              threshold_meters=thresh,
-                             max_tree_nodes=max_nodes)
+                             max_tree_nodes=max_nodes,
+                             ref_filter=ref_filter)
     matcher.load_enrichment(enrichment_csv)
     matcher.read_osm()
     matcher.search_pbf_nodes()
     matcher.read_csv()
     matcher.match_trees()
     matcher.generate_outputs(coord_source=coord_src, unmatched_out=out_unmatched)
-
