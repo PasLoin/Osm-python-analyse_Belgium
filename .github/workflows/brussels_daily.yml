@@ -22,9 +22,13 @@ jobs:
         with:
           python-version: "3.12"
 
-      # No pip install needed – script uses only stdlib
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq osmium-tool
+          pip install shapely
 
-      - name: Run SliceOSM extraction
+      - name: Run SliceOSM extraction + boundary clip
         run: python pbf_analyse/extract_brussels_daily.py
 
       - name: Commit & push
