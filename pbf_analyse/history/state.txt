@@ -1,12 +1,14 @@
 {
-  "uuid": "79f9d100-a6f7-45a9-a9c9-0eca4851b613",
-  "timestamp": "2026-05-12T01:01:04Z",
+  "uuid": "7397a4f5-6d5c-420c-b313-ed5425acb297",
+  "timestamp": "2026-05-12T02:23:00Z",
   "size_bytes": 45660844,
-  "elapsed": 109.487338479,
+  "elapsed": 20.498807213,
   "bbox": [
     50.749369,
     4.202947,
     50.94491,
     4.512645
-  ]
+  ],
+  "boundary_relation": 54094,
+  "buffer_meters": 100
 }
