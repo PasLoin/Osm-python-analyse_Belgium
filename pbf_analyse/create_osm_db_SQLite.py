@@ -12,8 +12,9 @@ from shapely.geometry import Point, Polygon, MultiPolygon
 import sqlite3
 import re
 import json
-!wget -O input.pbf https://download.openstreetmap.fr/extracts/europe/belgium/brussels_capital_region-latest.osm.pbf
-
+#!wget -O input.pbf https://download.openstreetmap.fr/extracts/europe/belgium/brussels_capital_region-latest.osm.pbf
+import subprocess
+subprocess.run(["wget", "-O", "input.pbf", "https://download.openstreetmap.fr/extracts/europe/belgium/brussels_capital_region-latest.osm.pbf"], check=True)
 # -- Configuration List --
 
 FEATURE_TAGS = [
