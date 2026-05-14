@@ -3,7 +3,7 @@
 Check associatedStreet relations in a Brussels OSM PBF for:
   1. Missing tags: addr:city, addr:country, addr:postcode
   2. Duplicate names (same name + same city + same postcode = duplicate)
-
+  3. wikidata tag
 Produces a plain-text report: associated-streets-report.txt
 """
 
@@ -66,6 +66,11 @@ def check_missing_tags(relations):
     return issues
 
 
+def check_missing_wikidata(relations):
+    """Return relations missing the wikidata tag."""
+    return [rel for rel in relations if not rel['tags'].get('wikidata', '').strip()]
+
+
 def _values_conflict(a, b):
     """Return True only if both values are non-empty AND different."""
     return bool(a) and bool(b) and a != b
@@ -123,7 +128,7 @@ def check_duplicates(relations):
     return duplicates
 
 
-def write_report(relations, missing_issues, duplicates, path):
+def write_report(relations, missing_issues, duplicates, missing_wikidata, path):
     with open(path, 'w', encoding='utf-8') as f:
         f.write('=== associatedStreet relations – Rapport de vérification ===\n')
         f.write(f'Total relations analysées : {len(relations)}\n\n')
@@ -157,6 +162,18 @@ def write_report(relations, missing_issues, duplicates, path):
                 )
             f.write('\n')
 
+        # --- Missing wikidata ----------------------------------------------
+        f.write(f'--- Tag wikidata manquant ({len(missing_wikidata)} relations) ---\n\n')
+        if not missing_wikidata:
+            f.write('Aucun problème détecté.\n\n')
+        for rel in missing_wikidata:
+            rid = rel['id']
+            name = rel['tags'].get('name', '(sans nom)')
+            f.write(
+                f'  relation/{rid}  {name}\n'
+                f'    https://www.openstreetmap.org/relation/{rid}\n\n'
+            )
+
     print(f'[OK] Rapport écrit : {path}')
 
 
@@ -179,7 +196,10 @@ def main():
     duplicates = check_duplicates(relations)
     print(f'[CHECK] {len(duplicates)} groupes de doublons')
 
-    write_report(relations, missing_issues, duplicates, output)
+    missing_wikidata = check_missing_wikidata(relations)
+    print(f'[CHECK] {len(missing_wikidata)} relations sans tag wikidata')
+
+    write_report(relations, missing_issues, duplicates, missing_wikidata, output)
 
 
 if __name__ == '__main__':
