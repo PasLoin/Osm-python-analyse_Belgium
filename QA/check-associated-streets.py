@@ -66,21 +66,61 @@ def check_missing_tags(relations):
     return issues
 
 
+def _values_conflict(a, b):
+    """Return True only if both values are non-empty AND different."""
+    return bool(a) and bool(b) and a != b
+
+
 def check_duplicates(relations):
     """
-    Group by (name, addr:city, addr:postcode).
-    Two relations with the same name but different city or postcode
-    are NOT duplicates.
+    Group by name, then cluster relations that are NOT differentiated
+    by an explicit difference in addr:city or addr:postcode.
+    A missing (empty) tag is compatible with any value.
     """
-    groups = defaultdict(list)
+    by_name = defaultdict(list)
     for rel in relations:
         name = rel['tags'].get('name', '').strip()
         if not name:
             continue
-        city = rel['tags'].get('addr:city', '').strip()
-        postcode = rel['tags'].get('addr:postcode', '').strip()
-        groups[(name, city, postcode)].append(rel)
-    return {k: v for k, v in groups.items() if len(v) > 1}
+        by_name[name].append(rel)
+
+    duplicates = {}
+    for name, rels in by_name.items():
+        if len(rels) < 2:
+            continue
+        # Build clusters of non-differentiated relations (union-find)
+        parent = list(range(len(rels)))
+
+        def find(x):
+            while parent[x] != x:
+                parent[x] = parent[parent[x]]
+                x = parent[x]
+            return x
+
+        def union(x, y):
+            parent[find(x)] = find(y)
+
+        for i in range(len(rels)):
+            ci = rels[i]['tags'].get('addr:city', '').strip()
+            pi = rels[i]['tags'].get('addr:postcode', '').strip()
+            for j in range(i + 1, len(rels)):
+                cj = rels[j]['tags'].get('addr:city', '').strip()
+                pj = rels[j]['tags'].get('addr:postcode', '').strip()
+                # If neither city nor postcode positively differs → duplicate
+                if not _values_conflict(ci, cj) and not _values_conflict(pi, pj):
+                    union(i, j)
+
+        clusters = defaultdict(list)
+        for i in range(len(rels)):
+            clusters[find(i)].append(rels[i])
+        for cluster in clusters.values():
+            if len(cluster) > 1:
+                r0 = cluster[0]
+                city = r0['tags'].get('addr:city', '').strip()
+                postcode = r0['tags'].get('addr:postcode', '').strip()
+                duplicates[(name, city, postcode)] = cluster
+
+    return duplicates
 
 
 def write_report(relations, missing_issues, duplicates, path):
