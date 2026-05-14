@@ -2,7 +2,7 @@ name: Daily Brussels PBF Extract (SliceOSM)
 
 on:
   schedule:
-    - cron: "30 0 * * *"
+    - cron: "30 0,12 * * *"
   workflow_dispatch:
 
 permissions:
