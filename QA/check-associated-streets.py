@@ -4,6 +4,7 @@ Check associatedStreet relations in a Brussels OSM PBF for:
   1. Missing tags: addr:city, addr:country, addr:postcode
   2. Duplicate names (same name + same city + same postcode = duplicate)
   3. wikidata tag
+  4. Objects belonging to multiple associatedStreet relations
 Produces a plain-text report: associated-streets-report.txt
 """
 
@@ -22,22 +23,69 @@ HEADERS = {'User-Agent': 'Mozilla/5.0 (compatible; UrbIS-Sync/1.0)'}
 REQUIRED_TAGS = ('addr:city', 'addr:country', 'addr:postcode')
 OUTPUT_FILE = 'associated-streets-report.txt'
 
+# Tags that indicate an object carries an address
+ADDR_TAGS = ('addr:housenumber', 'addr:street')
+
 
 class AssociatedStreetCollector(osmium.SimpleHandler):
-    """Collect all relations with type=associatedStreet."""
+    """Collect all relations with type=associatedStreet, including members."""
 
     def __init__(self):
         super().__init__()
         self.relations = []
+        # member_key → list of relation ids
+        self.member_to_relations = defaultdict(list)
 
     def relation(self, r):
         if r.tags.get('type') != 'associatedStreet':
             return
         tags = {t.k: t.v for t in r.tags}
+        members = []
+        for m in r.members:
+            members.append({
+                'type': m.type,   # 'n', 'w', 'r'
+                'ref': m.ref,
+                'role': m.role,
+            })
+            key = (m.type, m.ref)
+            self.member_to_relations[key].append(r.id)
+
         self.relations.append({
             'id': r.id,
             'tags': tags,
+            'members': members,
         })
+
+
+class AddressTagCollector(osmium.SimpleHandler):
+    """
+    Second pass: for every object that is a member of ≥2 associatedStreet
+    relations, collect its address tags so we can report them.
+    """
+
+    def __init__(self, multi_member_keys):
+        super().__init__()
+        # set of (type_char, ref) we care about
+        self.wanted = multi_member_keys
+        # (type_char, ref) → dict of addr:* tags
+        self.addr_tags = {}
+
+    def _collect(self, type_char, obj):
+        key = (type_char, obj.id)
+        if key not in self.wanted:
+            return
+        tags = {t.k: t.v for t in obj.tags if t.k.startswith('addr:')}
+        if tags:
+            self.addr_tags[key] = tags
+
+    def node(self, n):
+        self._collect('n', n)
+
+    def way(self, w):
+        self._collect('w', w)
+
+    def relation(self, r):
+        self._collect('r', r)
 
 
 def download_pbf(dest):
@@ -93,7 +141,6 @@ def check_duplicates(relations):
     for name, rels in by_name.items():
         if len(rels) < 2:
             continue
-        # Build clusters of non-differentiated relations (union-find)
         parent = list(range(len(rels)))
 
         def find(x):
@@ -111,7 +158,6 @@ def check_duplicates(relations):
             for j in range(i + 1, len(rels)):
                 cj = rels[j]['tags'].get('addr:city', '').strip()
                 pj = rels[j]['tags'].get('addr:postcode', '').strip()
-                # If neither city nor postcode positively differs → duplicate
                 if not _values_conflict(ci, cj) and not _values_conflict(pi, pj):
                     union(i, j)
 
@@ -128,7 +174,52 @@ def check_duplicates(relations):
     return duplicates
 
 
-def write_report(relations, missing_issues, duplicates, missing_wikidata, path):
+_TYPE_LABELS = {'n': 'node', 'w': 'way', 'r': 'relation'}
+
+
+def check_multi_membership(handler, pbf_path):
+    """
+    Find objects that belong to ≥2 associatedStreet relations.
+    Does a second pass on the PBF to collect their address tags.
+
+    Returns a list of dicts:
+      {
+        'type': 'n'/'w'/'r',
+        'ref': int,
+        'addr_tags': {…},
+        'relation_ids': [int, …],
+      }
+    """
+    # Step 1: find members appearing in ≥2 relations
+    multi = {
+        key: rel_ids
+        for key, rel_ids in handler.member_to_relations.items()
+        if len(rel_ids) >= 2
+    }
+    if not multi:
+        return []
+
+    # Step 2: second pass to grab address tags for those objects
+    print(f'[OSM] Passe 2 : récupération des tags addr:* pour {len(multi)} objets multi-relations...')
+    tag_collector = AddressTagCollector(set(multi.keys()))
+    tag_collector.apply_file(pbf_path)
+
+    results = []
+    for key, rel_ids in sorted(multi.items()):
+        type_char, ref = key
+        addr_tags = tag_collector.addr_tags.get(key, {})
+        results.append({
+            'type': type_char,
+            'ref': ref,
+            'addr_tags': addr_tags,
+            'relation_ids': sorted(set(rel_ids)),
+        })
+
+    return results
+
+
+def write_report(relations, missing_issues, duplicates, missing_wikidata,
+                 multi_membership, rel_tags_map, path):
     with open(path, 'w', encoding='utf-8') as f:
         f.write('=== associatedStreet relations – Rapport de vérification ===\n')
         f.write(f'Total relations analysées : {len(relations)}\n\n')
@@ -174,6 +265,36 @@ def write_report(relations, missing_issues, duplicates, missing_wikidata, path):
                 f'    https://www.openstreetmap.org/relation/{rid}\n\n'
             )
 
+        # --- Multi-membership ----------------------------------------------
+        f.write(f'--- Objets dans plusieurs associatedStreet '
+                f'({len(multi_membership)} objets) ---\n\n')
+        if not multi_membership:
+            f.write('Aucun problème détecté.\n\n')
+        for item in multi_membership:
+            type_label = _TYPE_LABELS.get(item['type'], item['type'])
+            ref = item['ref']
+            addr = item['addr_tags']
+            rel_ids = item['relation_ids']
+
+            # Header line: object type and link
+            f.write(f'  {type_label}/{ref}')
+            if addr:
+                hn = addr.get('addr:housenumber', '')
+                st = addr.get('addr:street', '')
+                if hn or st:
+                    f.write(f'  ({hn} {st})'.rstrip())
+            f.write(f'\n    https://www.openstreetmap.org/{type_label}/{ref}\n')
+
+            # List the associatedStreet relations it belongs to
+            f.write(f'    membre de {len(rel_ids)} relations :\n')
+            for rid in rel_ids:
+                rname = rel_tags_map.get(rid, {}).get('name', '(sans nom)')
+                f.write(
+                    f'      relation/{rid}  {rname}  '
+                    f'https://www.openstreetmap.org/relation/{rid}\n'
+                )
+            f.write('\n')
+
     print(f'[OK] Rapport écrit : {path}')
 
 
@@ -199,7 +320,14 @@ def main():
     missing_wikidata = check_missing_wikidata(relations)
     print(f'[CHECK] {len(missing_wikidata)} relations sans tag wikidata')
 
-    write_report(relations, missing_issues, duplicates, missing_wikidata, output)
+    multi_membership = check_multi_membership(handler, pbf_path)
+    print(f'[CHECK] {len(multi_membership)} objets dans ≥2 associatedStreet')
+
+    # Build a quick lookup for relation names (for the report)
+    rel_tags_map = {rel['id']: rel['tags'] for rel in relations}
+
+    write_report(relations, missing_issues, duplicates, missing_wikidata,
+                 multi_membership, rel_tags_map, output)
 
 
 if __name__ == '__main__':
