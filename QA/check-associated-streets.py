@@ -4,7 +4,7 @@ Check associatedStreet relations in a Brussels OSM PBF for:
   1. Missing tags: addr:city, addr:country, addr:postcode
   2. Duplicate names (same name + same city + same postcode = duplicate)
   3. wikidata tag
-  4. Objects belonging to multiple associatedStreet relations
+  4. Address objects (addr:housenumber + addr:street) in multiple associatedStreet relations
 Produces a plain-text report: associated-streets-report.txt
 """
 
@@ -179,7 +179,10 @@ _TYPE_LABELS = {'n': 'node', 'w': 'way', 'r': 'relation'}
 
 def check_multi_membership(handler, pbf_path):
     """
-    Find objects that belong to ≥2 associatedStreet relations.
+    Find address objects (with addr:housenumber + addr:street) that belong
+    to ≥2 associatedStreet relations.  Street segments (ways without an
+    address) are ignored — it is normal for them to appear in multiple
+    relations.
     Does a second pass on the PBF to collect their address tags.
 
     Returns a list of dicts:
@@ -208,6 +211,11 @@ def check_multi_membership(handler, pbf_path):
     for key, rel_ids in sorted(multi.items()):
         type_char, ref = key
         addr_tags = tag_collector.addr_tags.get(key, {})
+        # Only flag objects that carry an actual address
+        # (addr:housenumber + addr:street).  Street segments belonging
+        # to several relations are perfectly normal.
+        if 'addr:housenumber' not in addr_tags or 'addr:street' not in addr_tags:
+            continue
         results.append({
             'type': type_char,
             'ref': ref,
@@ -266,8 +274,8 @@ def write_report(relations, missing_issues, duplicates, missing_wikidata,
             )
 
         # --- Multi-membership ----------------------------------------------
-        f.write(f'--- Objets dans plusieurs associatedStreet '
-                f'({len(multi_membership)} objets) ---\n\n')
+        f.write(f'--- Adresses (addr:housenumber + addr:street) dans plusieurs '
+                f'associatedStreet ({len(multi_membership)} objets) ---\n\n')
         if not multi_membership:
             f.write('Aucun problème détecté.\n\n')
         for item in multi_membership:
@@ -321,7 +329,7 @@ def main():
     print(f'[CHECK] {len(missing_wikidata)} relations sans tag wikidata')
 
     multi_membership = check_multi_membership(handler, pbf_path)
-    print(f'[CHECK] {len(multi_membership)} objets dans ≥2 associatedStreet')
+    print(f'[CHECK] {len(multi_membership)} adresses dans ≥2 associatedStreet')
 
     # Build a quick lookup for relation names (for the report)
     rel_tags_map = {rel['id']: rel['tags'] for rel in relations}
