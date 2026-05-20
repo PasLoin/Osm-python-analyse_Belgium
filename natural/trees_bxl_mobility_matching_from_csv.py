@@ -1,24 +1,13 @@
-#Compare trees data between OSM and 
+#Compare trees data between OSM and
 ## https://data.mobility.brussels/fr/info/trees/
-### Purpose of this script is to find trees in OSM that have incorrect circumference and matching them with opendata to fix this.
+### Purpose of this script is to find trees in OSM and matching them with opendata to update them.
 ### Use csv lat/lon
 
 #!pip install osmium
-# Automatic download datas : 
-import requests
-
-url = "https://data.mobility.brussels/geoserver/bm_public_space/wfs?service=wfs&version=1.1.0&request=GetFeature&typeName=bm_public_space:trees&outputFormat=csv&srsName=EPSG:4326"
-r = requests.get(url)
-with open("trees.csv", "wb") as f:
-    f.write(r.content)
-
-url = "http://download.openstreetmap.fr/extracts/europe/belgium/brussels_capital_region-latest.osm.pbf"
-r = requests.get(url)
-with open("brussels_capital_region.pbf", "wb") as f:
-    f.write(r.content)
-
 #!pip install rtree
 
+import os
+import requests
 import pandas as pd
 import osmium as o
 import xml.sax.saxutils as saxutils
@@ -57,9 +46,10 @@ class NodeCacheHandler(o.SimpleHandler):
 
 
 class OSMTreeMatcher:
-    def __init__(self, pbf_path, csv_path, osm_out, csv_out,
-                 threshold_meters=0.2, max_tree_nodes=None, ref_filter='all'):
-        self.pbf_path = pbf_path
+    def __init__(self, osm_path, csv_path, osm_out, csv_out,
+                 threshold_meters=0.2, max_tree_nodes=None, ref_filter='all',
+                 species_filter='same'):
+        self.osm_path = osm_path
         self.csv_path = csv_path
         self.osm_out = osm_out
         self.csv_out = csv_out
@@ -67,6 +57,7 @@ class OSMTreeMatcher:
         self.threshold_km = threshold_meters / 1000.0
         self.max_tree_nodes = max_tree_nodes
         self.ref_filter = ref_filter  # 'all', 'no_ref', 'with_ref'
+        self.species_filter = species_filter  # 'same', 'all', 'different'
 
         self.handler = NodeCacheHandler()
         self.csv_data = None
@@ -119,9 +110,12 @@ class OSMTreeMatcher:
             print("[WARN] species_enrichment.csv non trouvé, enrichissement ignoré.")
 
     def read_osm(self):
-        reader = o.io.Reader(self.pbf_path)
+        """Lit le fichier OSM (PBF ou XML .osm) via osmium."""
+        print(f"Lecture du fichier OSM : {self.osm_path}")
+        reader = o.io.Reader(self.osm_path)
         o.apply(reader, self.handler)
         reader.close()
+        print(f"Nodes chargés depuis OSM : {len(self.handler.node_cache)}")
 
     def read_csv(self):
         cols = ['FID', 'gid', 'geom', 'numident', 'annee_plant', 'circumference', 'commune',
@@ -265,6 +259,20 @@ class OSMTreeMatcher:
                         if self.ref_filter == 'with_ref' and not has_ref:
                             continue
 
+                        # Filtre sur la correspondance species OSM vs CSV
+                        if self.species_filter != 'all':
+                            osm_species = osm_tags.get('species', '').strip().lower()
+                            csv_essence = self.csv_data.loc[r['CSV_index'], 'essence']
+                            csv_species, _ = self.parse_species(csv_essence)
+                            csv_species = (csv_species or '').strip().lower()
+                            # Si l'un des deux est vide, pas de comparaison possible → exclu
+                            if not osm_species or not csv_species:
+                                continue
+                            if self.species_filter == 'same' and osm_species != csv_species:
+                                continue
+                            if self.species_filter == 'different' and osm_species == csv_species:
+                                continue
+
                         if coord_source == 'csv':
                             lat, lon = self.extract_lat_lon(self.csv_data.loc[r['CSV_index'], 'geom'])
                         else:
@@ -333,8 +341,43 @@ class OSMTreeMatcher:
 
 
 if __name__ == '__main__':
-    pbf = 'brussels_capital_region.pbf'
+    # --- Choix du format OSM en entrée ---
+    SUPPORTED_OSM_EXTENSIONS = ('.pbf', '.osm', '.osm.xml', '.osm.pbf', '.osm.bz2', '.osm.gz')
+
+    print("Format OSM en entrée :")
+    print("  1 — PBF (téléchargement automatique depuis GitHub, défaut)")
+    print("  2 — Fichier local (PBF ou OSM XML)")
+    osm_format = input("Choix [1]: ").strip() or '1'
+
+    if osm_format == '2':
+        osm_input = input("Chemin du fichier OSM (.pbf, .osm, .osm.xml, .osm.bz2, .osm.gz) : ").strip()
+        if not os.path.isfile(osm_input):
+            print(f"Erreur : fichier introuvable — {osm_input}")
+            exit(1)
+        if not any(osm_input.lower().endswith(ext) for ext in SUPPORTED_OSM_EXTENSIONS):
+            print(f"Attention : extension non reconnue. Extensions supportées : {', '.join(SUPPORTED_OSM_EXTENSIONS)}")
+            confirm = input("Continuer quand même ? (o/n) [n]: ").strip().lower()
+            if confirm != 'o':
+                exit(1)
+    else:
+        osm_input = 'brussels_capital_region.pbf'
+        url = "https://raw.githubusercontent.com/PasLoin/Osm-python-analyse_Belgium/main/pbf_analyse/history/Brussels-daily.pbf"
+        print(f"Téléchargement du PBF depuis {url}…")
+        r = requests.get(url)
+        with open(osm_input, "wb") as f:
+            f.write(r.content)
+        print(f"PBF téléchargé : {osm_input} ({len(r.content) / 1024 / 1024:.1f} Mo)")
+
+    # --- Téléchargement CSV opendata  ---
     csvf = 'trees.csv'
+    csv_url = "https://data.mobility.brussels/geoserver/bm_public_space/wfs?service=wfs&version=1.1.0&request=GetFeature&typeName=bm_public_space:trees&outputFormat=csv&srsName=EPSG:4326"
+    print(f"Téléchargement du CSV opendata…")
+    r = requests.get(csv_url)
+    with open(csvf, "wb") as f:
+        f.write(r.content)
+    print(f"CSV téléchargé : {csvf}")
+
+    # --- Paramètres ---
     out_csv = 'matched_data.csv'
     out_osm = 'matched_data.osm'
     out_unmatched = 'new_trees.osm'
@@ -357,10 +400,21 @@ if __name__ == '__main__':
     ref_filter = ref_filter_map.get(ref_choice, 'all')
     print(f"→ ref_filter = {ref_filter}")
 
-    matcher = OSMTreeMatcher(pbf, csvf, out_osm, out_csv,
+    print("\nSpecies filter for matched trees:")
+    print("  1 — Only where OSM species = CSV species (default)")
+    print("  2 — All, regardless of species")
+    print("  3 — Only where OSM species ≠ CSV species")
+    species_choice = input("Choice [1]: ").strip() or '1'
+    species_filter_map = {'1': 'same', '2': 'all', '3': 'different'}
+    species_filter = species_filter_map.get(species_choice, 'same')
+    print(f"→ species_filter = {species_filter}")
+
+    # --- Exécution ---
+    matcher = OSMTreeMatcher(osm_input, csvf, out_osm, out_csv,
                              threshold_meters=thresh,
                              max_tree_nodes=max_nodes,
-                             ref_filter=ref_filter)
+                             ref_filter=ref_filter,
+                             species_filter=species_filter)
     matcher.load_enrichment(enrichment_csv)
     matcher.read_osm()
     matcher.search_pbf_nodes()
