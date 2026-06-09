@@ -8,11 +8,11 @@
    avec les données déjà présentes dans OpenStreetMap (natural=tree et
    amenity=bench, extraits d'un PBF), en utilisant une distance configurable
    (défaut 1 m). Les points UrbIS sans correspondance OSM sont écrits dans
-   candidate_tree.geojson et candidate_bench.geojson, ne contenant que le
-   tag principal (natural=tree ou amenity=bench).
+   candidate_tree.geojson et candidate_bench.geojson sous forme de GeoJSON
+   MINIMAL avec des géométries Point (PAS MultiPoint), pour un import propre
+   dans JOSM (sans relation parasite).
 
-   Le PBF OSM est SYSTÉMATIQUEMENT re-téléchargé à chaque exécution pour
-   garantir des données fraîches.
+   Le PBF OSM est SYSTÉMATIQUEMENT re-téléchargé à chaque exécution.
 
 Dépendances :
     pip install geopandas fiona pyproj requests lxml osmium shapely rtree
@@ -21,6 +21,7 @@ Dépendances :
 import os
 import re
 import sys
+import json
 import zipfile
 import tempfile
 from pathlib import Path
@@ -29,7 +30,7 @@ from xml.etree import ElementTree as ET
 import requests
 import geopandas as gpd
 import osmium
-from shapely.geometry import Point
+from shapely.geometry import Point, MultiPoint, mapping
 
 # ── Configuration UrbIS ──────────────────────────────────────────────
 ATOM_FEED_URL = (
@@ -53,6 +54,30 @@ DEFAULT_DISTANCE_M = 1.0
 
 
 # ─────────────────────────────────────────────────────────────────────
+# Helper : MultiPoint → Point simples
+# ─────────────────────────────────────────────────────────────────────
+
+def to_simple_points(geoms):
+    """Convertit toute géométrie MultiPoint / Point en liste de Point simples."""
+    out = []
+    for g in geoms:
+        if g is None or g.is_empty:
+            continue
+        if isinstance(g, Point):
+            out.append(g)
+        elif isinstance(g, MultiPoint):
+            for sub in g.geoms:
+                if not sub.is_empty:
+                    out.append(Point(sub.x, sub.y))
+        else:
+            # Fallback : utilise le centroïde (ne devrait pas arriver ici)
+            c = g.centroid
+            if not c.is_empty:
+                out.append(Point(c.x, c.y))
+    return out
+
+
+# ─────────────────────────────────────────────────────────────────────
 # Partie 1 : Téléchargement et extraction UrbIS
 # ─────────────────────────────────────────────────────────────────────
 
@@ -63,7 +88,7 @@ def fetch_gpkg_url_from_feed(feed_url: str) -> str:
     resp.raise_for_status()
 
     root = ET.fromstring(resp.content)
-    REGION_CODE = "04000"  # Région Bruxelles entière
+    REGION_CODE = "04000"
 
     gpkg_links: list[tuple[str, str]] = []
     for link in root.iter("{http://www.w3.org/2005/Atom}link"):
@@ -240,7 +265,9 @@ def find_candidates(urbis_geojson: Path, osm_gdf: gpd.GeoDataFrame,
                     distance_m: float, main_tag: tuple, output_path: Path):
     """
     Trouve les points UrbIS sans correspondance OSM dans `distance_m` mètres,
-    et écrit un GeoJSON ne contenant que le tag principal.
+    et écrit un GeoJSON MINIMAL avec des géométries Point simples (pas
+    MultiPoint), un seul tag, pas d'id Feature — pour un import propre dans
+    JOSM (sans relation parasite).
     """
     if not urbis_geojson.exists():
         print(f"\n⚠ {urbis_geojson} introuvable, étape ignorée.")
@@ -248,19 +275,23 @@ def find_candidates(urbis_geojson: Path, osm_gdf: gpd.GeoDataFrame,
 
     print(f"\nAnalyse de {urbis_geojson.name}…")
     urbis = gpd.read_file(urbis_geojson)
-    print(f"  {len(urbis)} points UrbIS chargés")
+    print(f"  {len(urbis)} entités UrbIS chargées")
     print(f"  {len(osm_gdf)} points OSM ({main_tag[0]}={main_tag[1]})")
 
     key, value = main_tag
 
+    # IMPORTANT : la couche UrbIS est en MultiPoint, on explode en Point simples
+    # AVANT toute opération spatiale, pour que la sortie soit propre.
+    if len(urbis) > 0:
+        urbis = urbis.explode(index_parts=False, ignore_index=True)
+        print(f"  {len(urbis)} points simples après explode")
+
     if len(urbis) == 0:
-        candidates_wgs = gpd.GeoDataFrame(geometry=[], crs=TARGET_CRS)
+        candidate_geoms = []
     else:
-        # Reprojection en CRS métrique pour le calcul de distance
         urbis_m = urbis.to_crs(METRIC_CRS).reset_index(drop=True)
 
         if len(osm_gdf) == 0:
-            # Aucun point OSM : tous les points UrbIS sont candidats
             candidates_m = urbis_m
         else:
             osm_m = osm_gdf.to_crs(METRIC_CRS).reset_index(drop=True)
@@ -270,25 +301,34 @@ def find_candidates(urbis_geojson: Path, osm_gdf: gpd.GeoDataFrame,
                 max_distance=distance_m,
                 distance_col="dist_m",
             )
-            # Indices UrbIS qui ont trouvé une correspondance OSM
             matched_idx = set(joined.loc[joined["index_right"].notna()].index)
             candidates_m = urbis_m.loc[~urbis_m.index.isin(matched_idx)]
 
         candidates_wgs = candidates_m.to_crs(TARGET_CRS)
+        # Sécurité supplémentaire : on force Point simple via to_simple_points
+        candidate_geoms = to_simple_points(candidates_wgs.geometry)
 
-    # Sortie propre : on garde uniquement le tag principal + la géométrie
-    n = len(candidates_wgs)
-    candidates_out = gpd.GeoDataFrame(
-        {key: [value] * n},
-        geometry=candidates_wgs.geometry.values if n else [],
-        crs=TARGET_CRS,
-    )
+    # GeoJSON minimal : Point simples, un seul tag, pas d'id Feature
+    features = []
+    for geom in candidate_geoms:
+        features.append({
+            "type": "Feature",
+            "properties": {key: value},
+            "geometry": mapping(geom),  # garanti "Point" car geom est un Point
+        })
+
+    fc = {
+        "type": "FeatureCollection",
+        "features": features,
+    }
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     if output_path.exists():
         output_path.unlink()
-    candidates_out.to_file(output_path, driver="GeoJSON")
-    print(f"  → {n} candidat(s) absent(s) d'OSM (seuil < {distance_m} m)")
+    with open(output_path, "w", encoding="utf-8") as f:
+        json.dump(fc, f, ensure_ascii=False, indent=2)
+
+    print(f"  → {len(features)} candidat(s) absent(s) d'OSM (seuil < {distance_m} m)")
     print(f"     écrits dans {output_path}")
 
 
@@ -348,7 +388,6 @@ def main():
     ]
 
     if not all(p.exists() for p in needed):
-        # Étape 1 : extraction UrbIS
         with tempfile.TemporaryDirectory(prefix="urbis_") as tmpdir:
             gpkg_url = fetch_gpkg_url_from_feed(ATOM_FEED_URL)
             gpkg_path = download_and_extract_gpkg(gpkg_url, tmpdir)
@@ -362,7 +401,6 @@ def main():
     else:
         print(f"Fichiers UrbIS déjà présents dans ./{OUTPUT_DIR}/ — étape 1 sautée.")
 
-    # Étape 2 : comparaison avec OSM
     compare_with_osm()
 
 
