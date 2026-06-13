@@ -3,6 +3,9 @@ name: Historical Brussels snapshots (one-shot)
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   clip:
     runs-on: ubuntu-latest
