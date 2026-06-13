@@ -12,7 +12,6 @@ jobs:
   extract-brussels:
     runs-on: ubuntu-latest
     timeout-minutes: 20
-
     steps:
       - name: Checkout repo
         uses: actions/checkout@v6
@@ -31,11 +30,14 @@ jobs:
       - name: Run SliceOSM extraction + boundary clip
         run: python pbf_analyse/extract_brussels_daily.py
 
+      - name: Generate history-list.json
+        run: python pbf_analyse/generate_history_list.py
+
       - name: Commit & push
         run: |
           git config user.name  "actions-user"
           git config user.email "actions@github.com"
-          git add pbf_analyse/history/Brussels-daily.pbf pbf_analyse/history/state.txt
+          git add pbf_analyse/history/Brussels-daily.pbf pbf_analyse/history/state.txt pbf_analyse/history-list.json
           git diff --cached --quiet && echo "No changes" && exit 0
           git commit -m "Daily Brussels PBF extract – $(date -u +%Y-%m-%d)"
           git push
