@@ -1,0 +1,434 @@
+[
+  {
+    "date": "2005-07-07",
+    "filename": "07_07_2005_brussels_capital_region.pbf",
+    "url": "https://raw.githubusercontent.com/PasLoin/Osm-python-analyse_Belgium/main/pbf_analyse/history/07_07_2005_brussels_capital_region.pbf",
+    "size_bytes": 278
+  },
+  {
+    "date": "2006-01-01",
+    "filename": "01_01_2006_brussels_capital_region.pbf",
+    "url": "https://raw.githubusercontent.com/PasLoin/Osm-python-analyse_Belgium/main/pbf_analyse/history/01_01_2006_brussels_capital_region.pbf",
+    "size_bytes": 1411
+  },
+  {
+    "date": "2007-01-01",
+    "filename": "01_01_2007_brussels_capital_region.pbf",
+    "url": "https://raw.githubusercontent.com/PasLoin/Osm-python-analyse_Belgium/main/pbf_analyse/history/01_01_2007_brussels_capital_region.pbf",
+    "size_bytes": 10936
+  },
+  {
+    "date": "2008-01-01",
+    "filename": "01_01_2008_brussels_capital_region.pbf",
+    "url": "https://raw.githubusercontent.com/PasLoin/Osm-python-analyse_Belgium/main/pbf_analyse/history/01_01_2008_brussels_capital_region.pbf",
+    "size_bytes": 228968
+  },
+  {
+    "date": "2009-01-01",
+    "filename": "01_01_2009_brussels_capital_region.pbf",
+    "url": "https://raw.githubusercontent.com/PasLoin/Osm-python-analyse_Belgium/main/pbf_analyse/history/01_01_2009_brussels_capital_region.pbf",
+    "size_bytes": 472324
+  },
+  {
+    "date": "2010-01-01",
+    "filename": "01_01_2010_brussels_capital_region.pbf",
+    "url": "https://raw.githubusercontent.com/PasLoin/Osm-python-analyse_Belgium/main/pbf_analyse/history/01_01_2010_brussels_capital_region.pbf",
+    "size_bytes": 1131331
+  },
+  {
+    "date": "2011-01-01",
+    "filename": "01_01_2011_brussels_capital_region.pbf",
+    "url": "https://raw.githubusercontent.com/PasLoin/Osm-python-analyse_Belgium/main/pbf_analyse/history/01_01_2011_brussels_capital_region.pbf",
+    "size_bytes": 1546676
+  },
+  {
+    "date": "2012-01-01",
+    "filename": "01_01_2012_brussels_capital_region.pbf",
+    "url": "https://raw.githubusercontent.com/PasLoin/Osm-python-analyse_Belgium/main/pbf_analyse/history/01_01_2012_brussels_capital_region.pbf",
+    "size_bytes": 3077532
+  },
+  {
+    "date": "2013-01-01",
+    "filename": "01_01_2013_brussels_capital_region.pbf",
+    "url": "https://raw.githubusercontent.com/PasLoin/Osm-python-analyse_Belgium/main/pbf_analyse/history/01_01_2013_brussels_capital_region.pbf",
+    "size_bytes": 3728406
+  },
+  {
+    "date": "2014-01-01",
+    "filename": "01_01_2014_brussels_capital_region.pbf",
+    "url": "https://raw.githubusercontent.com/PasLoin/Osm-python-analyse_Belgium/main/pbf_analyse/history/01_01_2014_brussels_capital_region.pbf",
+    "size_bytes": 13424208
+  },
+  {
+    "date": "2015-01-01",
+    "filename": "01_01_2015_brussels_capital_region.pbf",
+    "url": "https://raw.githubusercontent.com/PasLoin/Osm-python-analyse_Belgium/main/pbf_analyse/history/01_01_2015_brussels_capital_region.pbf",
+    "size_bytes": 15711958
+  },
+  {
+    "date": "2016-01-01",
+    "filename": "01_01_2016_brussels_capital_region.pbf",
+    "url": "https://raw.githubusercontent.com/PasLoin/Osm-python-analyse_Belgium/main/pbf_analyse/history/01_01_2016_brussels_capital_region.pbf",
+    "size_bytes": 16395952
+  },
+  {
+    "date": "2017-01-01",
+    "filename": "01_01_2017_brussels_capital_region.pbf",
+    "url": "https://raw.githubusercontent.com/PasLoin/Osm-python-analyse_Belgium/main/pbf_analyse/history/01_01_2017_brussels_capital_region.pbf",
+    "size_bytes": 17181137
+  },
+  {
+    "date": "2018-01-01",
+    "filename": "01_01_2018_brussels_capital_region.pbf",
+    "url": "https://raw.githubusercontent.com/PasLoin/Osm-python-analyse_Belgium/main/pbf_analyse/history/01_01_2018_brussels_capital_region.pbf",
+    "size_bytes": 18315911
+  },
+  {
+    "date": "2019-01-01",
+    "filename": "01_01_2019_brussels_capital_region.pbf",
+    "url": "https://raw.githubusercontent.com/PasLoin/Osm-python-analyse_Belgium/main/pbf_analyse/history/01_01_2019_brussels_capital_region.pbf",
+    "size_bytes": 19188271
+  },
+  {
+    "date": "2020-01-01",
+    "filename": "01_01_2020_brussels_capital_region.pbf",
+    "url": "https://raw.githubusercontent.com/PasLoin/Osm-python-analyse_Belgium/main/pbf_analyse/history/01_01_2020_brussels_capital_region.pbf",
+    "size_bytes": 20040607
+  },
+  {
+    "date": "2021-01-01",
+    "filename": "01_01_2021_brussels_capital_region.pbf",
+    "url": "https://raw.githubusercontent.com/PasLoin/Osm-python-analyse_Belgium/main/pbf_analyse/history/01_01_2021_brussels_capital_region.pbf",
+    "size_bytes": 21717374
+  },
+  {
+    "date": "2022-01-01",
+    "filename": "01_01_2022_brussels_capital_region.pbf",
+    "url": "https://raw.githubusercontent.com/PasLoin/Osm-python-analyse_Belgium/main/pbf_analyse/history/01_01_2022_brussels_capital_region.pbf",
+    "size_bytes": 23226862
+  },
+  {
+    "date": "2022-02-01",
+    "filename": "01_02_2022_brussels_capital_region.pbf",
+    "url": "https://raw.githubusercontent.com/PasLoin/Osm-python-analyse_Belgium/main/pbf_analyse/history/01_02_2022_brussels_capital_region.pbf",
+    "size_bytes": 21319151
+  },
+  {
+    "date": "2022-03-01",
+    "filename": "01_03_2022_brussels_capital_region.pbf",
+    "url": "https://raw.githubusercontent.com/PasLoin/Osm-python-analyse_Belgium/main/pbf_analyse/history/01_03_2022_brussels_capital_region.pbf",
+    "size_bytes": 21399164
+  },
+  {
+    "date": "2022-04-01",
+    "filename": "01_04_2022_brussels_capital_region.pbf",
+    "url": "https://raw.githubusercontent.com/PasLoin/Osm-python-analyse_Belgium/main/pbf_analyse/history/01_04_2022_brussels_capital_region.pbf",
+    "size_bytes": 21473802
+  },
+  {
+    "date": "2022-05-01",
+    "filename": "01_05_2022_brussels_capital_region.pbf",
+    "url": "https://raw.githubusercontent.com/PasLoin/Osm-python-analyse_Belgium/main/pbf_analyse/history/01_05_2022_brussels_capital_region.pbf",
+    "size_bytes": 21627106
+  },
+  {
+    "date": "2022-06-01",
+    "filename": "01_06_2022_brussels_capital_region.pbf",
+    "url": "https://raw.githubusercontent.com/PasLoin/Osm-python-analyse_Belgium/main/pbf_analyse/history/01_06_2022_brussels_capital_region.pbf",
+    "size_bytes": 21752127
+  },
+  {
+    "date": "2022-07-01",
+    "filename": "01_07_2022_brussels_capital_region.pbf",
+    "url": "https://raw.githubusercontent.com/PasLoin/Osm-python-analyse_Belgium/main/pbf_analyse/history/01_07_2022_brussels_capital_region.pbf",
+    "size_bytes": 21838626
+  },
+  {
+    "date": "2022-08-01",
+    "filename": "01_08_2022_brussels_capital_region.pbf",
+    "url": "https://raw.githubusercontent.com/PasLoin/Osm-python-analyse_Belgium/main/pbf_analyse/history/01_08_2022_brussels_capital_region.pbf",
+    "size_bytes": 21944588
+  },
+  {
+    "date": "2022-09-01",
+    "filename": "01_09_2022_brussels_capital_region.pbf",
+    "url": "https://raw.githubusercontent.com/PasLoin/Osm-python-analyse_Belgium/main/pbf_analyse/history/01_09_2022_brussels_capital_region.pbf",
+    "size_bytes": 22030471
+  },
+  {
+    "date": "2022-10-01",
+    "filename": "01_10_2022_brussels_capital_region.pbf",
+    "url": "https://raw.githubusercontent.com/PasLoin/Osm-python-analyse_Belgium/main/pbf_analyse/history/01_10_2022_brussels_capital_region.pbf",
+    "size_bytes": 22100440
+  },
+  {
+    "date": "2022-11-01",
+    "filename": "01_11_2022_brussels_capital_region.pbf",
+    "url": "https://raw.githubusercontent.com/PasLoin/Osm-python-analyse_Belgium/main/pbf_analyse/history/01_11_2022_brussels_capital_region.pbf",
+    "size_bytes": 22183150
+  },
+  {
+    "date": "2022-12-01",
+    "filename": "01_12_2022_brussels_capital_region.pbf",
+    "url": "https://raw.githubusercontent.com/PasLoin/Osm-python-analyse_Belgium/main/pbf_analyse/history/01_12_2022_brussels_capital_region.pbf",
+    "size_bytes": 22284482
+  },
+  {
+    "date": "2023-01-01",
+    "filename": "01_01_2023_brussels_capital_region.pbf",
+    "url": "https://raw.githubusercontent.com/PasLoin/Osm-python-analyse_Belgium/main/pbf_analyse/history/01_01_2023_brussels_capital_region.pbf",
+    "size_bytes": 22374417
+  },
+  {
+    "date": "2023-02-01",
+    "filename": "01_02_2023_brussels_capital_region.pbf",
+    "url": "https://raw.githubusercontent.com/PasLoin/Osm-python-analyse_Belgium/main/pbf_analyse/history/01_02_2023_brussels_capital_region.pbf",
+    "size_bytes": 22488565
+  },
+  {
+    "date": "2023-03-01",
+    "filename": "01_03_2023_brussels_capital_region.pbf",
+    "url": "https://raw.githubusercontent.com/PasLoin/Osm-python-analyse_Belgium/main/pbf_analyse/history/01_03_2023_brussels_capital_region.pbf",
+    "size_bytes": 22606896
+  },
+  {
+    "date": "2023-04-01",
+    "filename": "01_04_2023_brussels_capital_region.pbf",
+    "url": "https://raw.githubusercontent.com/PasLoin/Osm-python-analyse_Belgium/main/pbf_analyse/history/01_04_2023_brussels_capital_region.pbf",
+    "size_bytes": 22715876
+  },
+  {
+    "date": "2023-05-01",
+    "filename": "01_05_2023_brussels_capital_region.pbf",
+    "url": "https://raw.githubusercontent.com/PasLoin/Osm-python-analyse_Belgium/main/pbf_analyse/history/01_05_2023_brussels_capital_region.pbf",
+    "size_bytes": 22875973
+  },
+  {
+    "date": "2023-06-01",
+    "filename": "01_06_2023_brussels_capital_region.pbf",
+    "url": "https://raw.githubusercontent.com/PasLoin/Osm-python-analyse_Belgium/main/pbf_analyse/history/01_06_2023_brussels_capital_region.pbf",
+    "size_bytes": 22964320
+  },
+  {
+    "date": "2023-07-01",
+    "filename": "01_07_2023_brussels_capital_region.pbf",
+    "url": "https://raw.githubusercontent.com/PasLoin/Osm-python-analyse_Belgium/main/pbf_analyse/history/01_07_2023_brussels_capital_region.pbf",
+    "size_bytes": 23026911
+  },
+  {
+    "date": "2023-08-01",
+    "filename": "01_08_2023_brussels_capital_region.pbf",
+    "url": "https://raw.githubusercontent.com/PasLoin/Osm-python-analyse_Belgium/main/pbf_analyse/history/01_08_2023_brussels_capital_region.pbf",
+    "size_bytes": 23097294
+  },
+  {
+    "date": "2023-09-01",
+    "filename": "01_09_2023_brussels_capital_region.pbf",
+    "url": "https://raw.githubusercontent.com/PasLoin/Osm-python-analyse_Belgium/main/pbf_analyse/history/01_09_2023_brussels_capital_region.pbf",
+    "size_bytes": 23164877
+  },
+  {
+    "date": "2023-10-01",
+    "filename": "01_10_2023_brussels_capital_region.pbf",
+    "url": "https://raw.githubusercontent.com/PasLoin/Osm-python-analyse_Belgium/main/pbf_analyse/history/01_10_2023_brussels_capital_region.pbf",
+    "size_bytes": 23264276
+  },
+  {
+    "date": "2023-11-01",
+    "filename": "01_11_2023_brussels_capital_region.pbf",
+    "url": "https://raw.githubusercontent.com/PasLoin/Osm-python-analyse_Belgium/main/pbf_analyse/history/01_11_2023_brussels_capital_region.pbf",
+    "size_bytes": 23387542
+  },
+  {
+    "date": "2023-12-01",
+    "filename": "01_12_2023_brussels_capital_region.pbf",
+    "url": "https://raw.githubusercontent.com/PasLoin/Osm-python-analyse_Belgium/main/pbf_analyse/history/01_12_2023_brussels_capital_region.pbf",
+    "size_bytes": 23533119
+  },
+  {
+    "date": "2024-01-01",
+    "filename": "01_01_2024_brussels_capital_region.pbf",
+    "url": "https://raw.githubusercontent.com/PasLoin/Osm-python-analyse_Belgium/main/pbf_analyse/history/01_01_2024_brussels_capital_region.pbf",
+    "size_bytes": 26190306
+  },
+  {
+    "date": "2024-01-10",
+    "filename": "10_01_2024_brussels_capital_region.pbf",
+    "url": "https://raw.githubusercontent.com/PasLoin/Osm-python-analyse_Belgium/main/pbf_analyse/history/10_01_2024_brussels_capital_region.pbf",
+    "size_bytes": 23094323
+  },
+  {
+    "date": "2024-02-01",
+    "filename": "01_02_2024_brussels_capital_region.pbf",
+    "url": "https://raw.githubusercontent.com/PasLoin/Osm-python-analyse_Belgium/main/pbf_analyse/history/01_02_2024_brussels_capital_region.pbf",
+    "size_bytes": 23163814
+  },
+  {
+    "date": "2024-03-01",
+    "filename": "01_03_2024_brussels_capital_region.pbf",
+    "url": "https://raw.githubusercontent.com/PasLoin/Osm-python-analyse_Belgium/main/pbf_analyse/history/01_03_2024_brussels_capital_region.pbf",
+    "size_bytes": 23224206
+  },
+  {
+    "date": "2024-04-01",
+    "filename": "01_04_2024_brussels_capital_region.pbf",
+    "url": "https://raw.githubusercontent.com/PasLoin/Osm-python-analyse_Belgium/main/pbf_analyse/history/01_04_2024_brussels_capital_region.pbf",
+    "size_bytes": 23328135
+  },
+  {
+    "date": "2024-05-01",
+    "filename": "01_05_2024_brussels_capital_region.pbf",
+    "url": "https://raw.githubusercontent.com/PasLoin/Osm-python-analyse_Belgium/main/pbf_analyse/history/01_05_2024_brussels_capital_region.pbf",
+    "size_bytes": 30566209
+  },
+  {
+    "date": "2024-06-01",
+    "filename": "01_06_2024_brussels_capital_region.pbf",
+    "url": "https://raw.githubusercontent.com/PasLoin/Osm-python-analyse_Belgium/main/pbf_analyse/history/01_06_2024_brussels_capital_region.pbf",
+    "size_bytes": 30700457
+  },
+  {
+    "date": "2024-07-01",
+    "filename": "01_07_2024_brussels_capital_region.pbf",
+    "url": "https://raw.githubusercontent.com/PasLoin/Osm-python-analyse_Belgium/main/pbf_analyse/history/01_07_2024_brussels_capital_region.pbf",
+    "size_bytes": 31603703
+  },
+  {
+    "date": "2024-08-01",
+    "filename": "01_08_2024_brussels_capital_region.pbf",
+    "url": "https://raw.githubusercontent.com/PasLoin/Osm-python-analyse_Belgium/main/pbf_analyse/history/01_08_2024_brussels_capital_region.pbf",
+    "size_bytes": 31708032
+  },
+  {
+    "date": "2024-09-01",
+    "filename": "01_09_2024_brussels_capital_region.pbf",
+    "url": "https://raw.githubusercontent.com/PasLoin/Osm-python-analyse_Belgium/main/pbf_analyse/history/01_09_2024_brussels_capital_region.pbf",
+    "size_bytes": 31848172
+  },
+  {
+    "date": "2024-10-01",
+    "filename": "01_10_2024_brussels_capital_region.pbf",
+    "url": "https://raw.githubusercontent.com/PasLoin/Osm-python-analyse_Belgium/main/pbf_analyse/history/01_10_2024_brussels_capital_region.pbf",
+    "size_bytes": 31963940
+  },
+  {
+    "date": "2024-11-01",
+    "filename": "01_11_2024_brussels_capital_region.pbf",
+    "url": "https://raw.githubusercontent.com/PasLoin/Osm-python-analyse_Belgium/main/pbf_analyse/history/01_11_2024_brussels_capital_region.pbf",
+    "size_bytes": 32140735
+  },
+  {
+    "date": "2024-12-01",
+    "filename": "01_12_2024_brussels_capital_region.pbf",
+    "url": "https://raw.githubusercontent.com/PasLoin/Osm-python-analyse_Belgium/main/pbf_analyse/history/01_12_2024_brussels_capital_region.pbf",
+    "size_bytes": 32273619
+  },
+  {
+    "date": "2025-01-01",
+    "filename": "01_01_2025_brussels_capital_region.pbf",
+    "url": "https://raw.githubusercontent.com/PasLoin/Osm-python-analyse_Belgium/main/pbf_analyse/history/01_01_2025_brussels_capital_region.pbf",
+    "size_bytes": 32388886
+  },
+  {
+    "date": "2025-02-01",
+    "filename": "01_02_2025_brussels_capital_region.pbf",
+    "url": "https://raw.githubusercontent.com/PasLoin/Osm-python-analyse_Belgium/main/pbf_analyse/history/01_02_2025_brussels_capital_region.pbf",
+    "size_bytes": 24760002
+  },
+  {
+    "date": "2025-03-01",
+    "filename": "01_03_2025_brussels_capital_region.pbf",
+    "url": "https://raw.githubusercontent.com/PasLoin/Osm-python-analyse_Belgium/main/pbf_analyse/history/01_03_2025_brussels_capital_region.pbf",
+    "size_bytes": 24831724
+  },
+  {
+    "date": "2025-04-01",
+    "filename": "01_04_2025_brussels_capital_region.pbf",
+    "url": "https://raw.githubusercontent.com/PasLoin/Osm-python-analyse_Belgium/main/pbf_analyse/history/01_04_2025_brussels_capital_region.pbf",
+    "size_bytes": 24927539
+  },
+  {
+    "date": "2025-05-05",
+    "filename": "05_05_2025_brussels_capital_region.pbf",
+    "url": "https://raw.githubusercontent.com/PasLoin/Osm-python-analyse_Belgium/main/pbf_analyse/history/05_05_2025_brussels_capital_region.pbf",
+    "size_bytes": 32953192
+  },
+  {
+    "date": "2025-06-01",
+    "filename": "01_06_2025_brussels_capital_region.pbf",
+    "url": "https://raw.githubusercontent.com/PasLoin/Osm-python-analyse_Belgium/main/pbf_analyse/history/01_06_2025_brussels_capital_region.pbf",
+    "size_bytes": 33069710
+  },
+  {
+    "date": "2025-07-01",
+    "filename": "01_07_2025_brussels_capital_region.pbf",
+    "url": "https://raw.githubusercontent.com/PasLoin/Osm-python-analyse_Belgium/main/pbf_analyse/history/01_07_2025_brussels_capital_region.pbf",
+    "size_bytes": 33172425
+  },
+  {
+    "date": "2025-08-01",
+    "filename": "01_08_2025_brussels_capital_region.pbf",
+    "url": "https://raw.githubusercontent.com/PasLoin/Osm-python-analyse_Belgium/main/pbf_analyse/history/01_08_2025_brussels_capital_region.pbf",
+    "size_bytes": 33268579
+  },
+  {
+    "date": "2025-09-01",
+    "filename": "01_09_2025_brussels_capital_region.pbf",
+    "url": "https://raw.githubusercontent.com/PasLoin/Osm-python-analyse_Belgium/main/pbf_analyse/history/01_09_2025_brussels_capital_region.pbf",
+    "size_bytes": 33361649
+  },
+  {
+    "date": "2025-10-01",
+    "filename": "01_10_2025_brussels_capital_region.pbf",
+    "url": "https://raw.githubusercontent.com/PasLoin/Osm-python-analyse_Belgium/main/pbf_analyse/history/01_10_2025_brussels_capital_region.pbf",
+    "size_bytes": 32373323
+  },
+  {
+    "date": "2025-11-01",
+    "filename": "01_11_2025_brussels_capital_region.pbf",
+    "url": "https://raw.githubusercontent.com/PasLoin/Osm-python-analyse_Belgium/main/pbf_analyse/history/01_11_2025_brussels_capital_region.pbf",
+    "size_bytes": 32465595
+  },
+  {
+    "date": "2025-12-01",
+    "filename": "01_12_2025_brussels_capital_region.pbf",
+    "url": "https://raw.githubusercontent.com/PasLoin/Osm-python-analyse_Belgium/main/pbf_analyse/history/01_12_2025_brussels_capital_region.pbf",
+    "size_bytes": 32555665
+  },
+  {
+    "date": "2026-01-01",
+    "filename": "01_01_2026_brussels_capital_region.pbf",
+    "url": "https://raw.githubusercontent.com/PasLoin/Osm-python-analyse_Belgium/main/pbf_analyse/history/01_01_2026_brussels_capital_region.pbf",
+    "size_bytes": 32632005
+  },
+  {
+    "date": "2026-02-01",
+    "filename": "01_02_2026_brussels_capital_region.pbf",
+    "url": "https://raw.githubusercontent.com/PasLoin/Osm-python-analyse_Belgium/main/pbf_analyse/history/01_02_2026_brussels_capital_region.pbf",
+    "size_bytes": 32736221
+  },
+  {
+    "date": "2026-03-01",
+    "filename": "01_03_2026_brussels_capital_region.pbf",
+    "url": "https://raw.githubusercontent.com/PasLoin/Osm-python-analyse_Belgium/main/pbf_analyse/history/01_03_2026_brussels_capital_region.pbf",
+    "size_bytes": 32882936
+  },
+  {
+    "date": "2026-04-01",
+    "filename": "01_04_2026_brussels_capital_region.pbf",
+    "url": "https://raw.githubusercontent.com/PasLoin/Osm-python-analyse_Belgium/main/pbf_analyse/history/01_04_2026_brussels_capital_region.pbf",
+    "size_bytes": 33049005
+  },
+  {
+    "date": "2026-05-01",
+    "filename": "01_05_2026_brussels_capital_region.pbf",
+    "url": "https://raw.githubusercontent.com/PasLoin/Osm-python-analyse_Belgium/main/pbf_analyse/history/01_05_2026_brussels_capital_region.pbf",
+    "size_bytes": 33390490
+  },
+  {
+    "date": "2026-06-01",
+    "filename": "01_06_2026_brussels_capital_region.pbf",
+    "url": "https://raw.githubusercontent.com/PasLoin/Osm-python-analyse_Belgium/main/pbf_analyse/history/01_06_2026_brussels_capital_region.pbf",
+    "size_bytes": 33675458
+  }
+]
