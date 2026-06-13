@@ -4,7 +4,7 @@ Daily Brussels PBF extract via SliceOSM API + precise boundary clipping.
 
 1. Fetch a bbox extract from SliceOSM (minute-level replication freshness).
 2. Download the Brussels-Capital Region boundary (OSM relation 54094)
-   from polygons.openstreetmap.fr, apply a 100 m buffer.
+   from a custom .poly file hosted on GitHub, apply a 100 m buffer.
 3. Clip the PBF to that buffered polygon with osmium-tool.
 """
 
@@ -29,8 +29,11 @@ BBOX = [50.749369, 4.202947, 50.944910, 4.512645]
 
 # Brussels-Capital Region (OSM relation)
 BOUNDARY_RELATION_ID = 54094
+
+# Custom .poly file hosted on GitHub (raw content)
 BOUNDARY_POLY_URL = (
-    f"https://polygons.openstreetmap.fr/get_poly.py?id={BOUNDARY_RELATION_ID}"
+    "https://raw.githubusercontent.com/PasLoin/"
+    "Osm-python-analyse_Belgium/main/pbf_analyse/54094.poly"
 )
 BUFFER_METERS = 100
 
@@ -103,9 +106,13 @@ def download_pbf(uuid: str, dest: str):
 # ── Boundary polygon ──────────────────────────────────────────────
 
 def fetch_poly_file() -> str:
-    """Download the .poly file for the Brussels-Capital boundary."""
-    print(f"Fetching boundary polygon (relation {BOUNDARY_RELATION_ID}) …")
-    with urllib.request.urlopen(BOUNDARY_POLY_URL, timeout=30) as resp:
+    """Download the .poly file for the Brussels-Capital boundary from GitHub."""
+    print(f"Fetching boundary polygon from {BOUNDARY_POLY_URL} …")
+    req = urllib.request.Request(
+        BOUNDARY_POLY_URL,
+        headers={"User-Agent": "brussels-pbf-clip-script"},
+    )
+    with urllib.request.urlopen(req, timeout=30) as resp:
         text = resp.read().decode()
     print(f"  received {len(text)} bytes")
     return text
@@ -254,6 +261,7 @@ def write_state(uuid: str, status: dict):
         "elapsed": status.get("Elapsed", ""),
         "bbox": BBOX,
         "boundary_relation": BOUNDARY_RELATION_ID,
+        "boundary_poly_url": BOUNDARY_POLY_URL,
         "buffer_meters": BUFFER_METERS,
     }
     with open(STATE_FILE, "w") as f:
