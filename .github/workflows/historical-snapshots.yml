@@ -1,0 +1,95 @@
+name: Historical Brussels snapshots (one-shot)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  clip:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - code: "140101"
+            date: "01_01_2014"
+          - code: "150101"
+            date: "01_01_2015"
+          - code: "160101"
+            date: "01_01_2016"
+          - code: "170101"
+            date: "01_01_2017"
+          - code: "180101"
+            date: "01_01_2018"
+          - code: "190101"
+            date: "01_01_2019"
+          - code: "200101"
+            date: "01_01_2020"
+          - code: "210101"
+            date: "01_01_2021"
+          - code: "220101"
+            date: "01_01_2022"
+          - code: "230101"
+            date: "01_01_2023"
+          - code: "240101"
+            date: "01_01_2024"
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v5
+
+      - name: Install osmium-tool
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y osmium-tool
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Python dependencies
+        run: pip install shapely
+
+      - name: Generate snapshot for ${{ matrix.date }}
+        run: python pbf_analyse/historical_snapshot.py "${{ matrix.code }}" "${{ matrix.date }}"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v5
+        with:
+          name: snapshot-${{ matrix.date }}
+          path: output/*_brussels_capital_region.pbf
+          retention-days: 1
+
+  commit:
+    needs: clip
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v5
+
+      - name: Download all snapshot artifacts
+        uses: actions/download-artifact@v5
+        with:
+          path: artifacts
+          pattern: snapshot-*
+          merge-multiple: true
+
+      - name: Move snapshots into history folder
+        run: |
+          mkdir -p pbf_analyse/history
+          mv artifacts/*.pbf pbf_analyse/history/
+          ls -lh pbf_analyse/history/
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add pbf_analyse/history/*_brussels_capital_region.pbf
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Add historical Brussels-Capital Region snapshots (2014-2024)"
+            git push
+          fi
