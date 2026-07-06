@@ -275,46 +275,22 @@ def assess_tags(osm: OSMPoint) -> tuple[list[str], list[str]]:
 
 
 # ── 5a. GeoJSON — bulles absentes d'OSM ───────────────────────────────────────
-def write_geojson_missing_from_osm(miss_osm: list[ODPoint], now: str) -> str:
-    """
-    GeoJSON prêt à l'emploi pour créer les nœuds manquants dans OSM.
-
-    Les propriétés sont directement les tags OSM à appliquer.
-    La propriété _opendata_* contient les métadonnées source (préfixe _
-    pour les distinguer des vrais tags OSM).
-    """
+def write_geojson_missing_from_osm(miss_osm: list[ODPoint]) -> str:
+    """GeoJSON prêt à l'emploi : tags OSM uniquement, rien d'autre."""
     features = []
     for b in sorted(miss_osm, key=lambda x: (x.postalcode, x.address)):
         location = detect_location(b.category)
-
-        # Tags OSM prêts à l'emploi
         osm_tags: dict = {**OSM_TAGS_TEMPLATE}
         if location:
             osm_tags["location"] = location
-        osm_tags["source"] = "opendata.bruxelles.be"
-        osm_tags["note"]   = (
-            f"À vérifier sur le terrain. "
-            f"Source OpenData : {b.address}, {b.postalcode} {b.municipality}"
-        )
-
-        # Métadonnées source (préfixe _ → pas des tags OSM)
-        meta: dict = {
-            "_opendata_address":      b.address,
-            "_opendata_municipality": b.municipality,
-            "_opendata_postalcode":   b.postalcode,
-            "_opendata_category":     b.category,
-            "_generated_at":          now,
-        }
-
         features.append({
             "type": "Feature",
             "geometry": {
                 "type":        "Point",
                 "coordinates": [round(b.lon, 7), round(b.lat, 7)],
             },
-            "properties": {**osm_tags, **meta},
+            "properties": osm_tags,
         })
-
     return json.dumps(
         {"type": "FeatureCollection", "features": features},
         ensure_ascii=False,
@@ -323,35 +299,18 @@ def write_geojson_missing_from_osm(miss_osm: list[ODPoint], now: str) -> str:
 
 
 # ── 5b. GeoJSON — nœuds OSM absents de l'OpenData ────────────────────────────
-def write_geojson_missing_from_opendata(miss_od: list[OSMPoint], now: str) -> str:
-    """
-    GeoJSON des nœuds OSM sans correspondance dans l'OpenData.
-
-    Les propriétés reprennent les tags OSM existants tels quels,
-    plus des métadonnées OSM (_osm_*).
-    """
+def write_geojson_missing_from_opendata(miss_od: list[OSMPoint]) -> str:
+    """GeoJSON des nœuds OSM sans correspondance : tags OSM existants tels quels."""
     features = []
     for b in miss_od:
-        # Tags OSM existants tels quels
-        props: dict = {**b.tags}
-
-        # Métadonnées OSM (préfixe _osm_ pour les distinguer)
-        props["_osm_id"]          = b.osm_id
-        props["_osm_type"]        = b.osm_type
-        props["_osm_url"]         = (
-            f"https://www.openstreetmap.org/{b.osm_type}/{b.osm_id}"
-        )
-        props["_generated_at"]    = now
-
         features.append({
             "type": "Feature",
             "geometry": {
                 "type":        "Point",
                 "coordinates": [round(b.lon, 7), round(b.lat, 7)],
             },
-            "properties": props,
+            "properties": dict(b.tags),
         })
-
     return json.dumps(
         {"type": "FeatureCollection", "features": features},
         ensure_ascii=False,
@@ -531,8 +490,8 @@ def write_reports(od_list: list[ODPoint], osm_list: list[OSMPoint]) -> None:
     files: dict[str, str] = {
         "report_glass_bins.txt":         txt,
         "report_glass_bins.json":        json.dumps(jdata, ensure_ascii=False, indent=2),
-        "missing_from_osm.geojson":      write_geojson_missing_from_osm(miss_osm, now),
-        "missing_from_opendata.geojson": write_geojson_missing_from_opendata(miss_od, now),
+        "missing_from_osm.geojson":      write_geojson_missing_from_osm(miss_osm),
+        "missing_from_opendata.geojson": write_geojson_missing_from_opendata(miss_od),
     }
 
     print()
