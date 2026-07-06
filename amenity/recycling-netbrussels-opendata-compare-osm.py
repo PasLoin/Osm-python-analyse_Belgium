@@ -109,6 +109,37 @@ def haversine_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
 
+
+# ── Déduplication OpenData ─────────────────────────────────────────────────────
+def deduplicate_opendata(pts: list[ODPoint], radius_m: float = 2.0) -> list[ODPoint]:
+    """
+    L'OpenData liste parfois le même conteneur physique deux fois :
+    une fois "couleur" et une fois "blanche". OSM n'a qu'un seul nœud.
+    Sans déduplication, l'une des deux entrées tombe toujours en
+    "missing in OSM" même quand le nœud est à 0 m.
+
+    On supprime les doublons dont les coordonnées sont distantes de
+    moins de radius_m mètres, en gardant la première occurrence.
+    """
+    kept: list[ODPoint] = []
+    absorbed: set[str] = set()
+
+    for i, a in enumerate(pts):
+        if a.uid in absorbed:
+            continue
+        kept.append(a)
+        for b in pts[i + 1:]:
+            if b.uid in absorbed:
+                continue
+            if haversine_m(a.lat, a.lon, b.lat, b.lon) <= radius_m:
+                absorbed.add(b.uid)
+
+    removed = len(pts) - len(kept)
+    if removed:
+        print(f"  -> {removed} doublon(s) OpenData supprimes "
+              f"(meme emplacement a moins de {radius_m} m)")
+    return kept
+
 # ── Détection du tag location ──────────────────────────────────────────────────
 def detect_location(category: str) -> Optional[str]:
     c = (category.lower()
@@ -503,6 +534,7 @@ def write_reports(od_list: list[ODPoint], osm_list: list[OSMPoint]) -> None:
 # ── Point d'entrée ─────────────────────────────────────────────────────────────
 def main() -> None:
     od_list  = fetch_opendata()
+    od_list  = deduplicate_opendata(od_list)
     osm_list = fetch_osm(OSM_PBF_PATH)
     spatial_match(od_list, osm_list)
     write_reports(od_list, osm_list)
