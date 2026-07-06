@@ -434,7 +434,7 @@ def write_reports(od_list: list[ODPoint], osm_list: list[OSMPoint]) -> None:
                 od_label = (f"{matched_od.address}, {matched_od.postalcode} {matched_od.municipality}"
                             if matched_od else nearest.matched_od_uid)
                 L.append(
-                    f"    ! Noeud OSM le plus proche : {nearest.osm_type}/{nearest.nearest_osm_id or nearest.osm_id}"
+                    f"    ! Noeud OSM le plus proche : {nearest.osm_type}/{nearest.osm_id}"
                     f" a {b.nearest_osm_dist} m — DEJA APPARIE a : {od_label}"
                 )
             elif b.nearest_osm_dist is not None and b.nearest_osm_dist > MATCH_THRESHOLD_M:
