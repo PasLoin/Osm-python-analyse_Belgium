@@ -7,10 +7,13 @@ Comparaison des bulles à verre bruxelloises
 Fichiers produits (dans le même dossier que ce script) :
   report_glass_bins.txt             — rapport lisible
   report_glass_bins.json            — rapport structuré
-  missing_from_osm.geojson          — bulles OpenData absentes d'OSM,
-                                       tags OSM prêts à l'emploi
-  missing_from_opendata.geojson     — nœuds OSM absents de l'OpenData,
-                                       tags OSM existants tels quels
+  missing_from_osm.geojson          — bulles OpenData sans aucun nœud
+                                       amenity=recycling dans un rayon de
+                                       MATCH_THRESHOLD_M m (vraiment absentes)
+  needs_glass_tag.geojson           — bulles OpenData dont le nœud OSM apparié
+                                       existe mais manque recycling:glass_bottles=yes
+  missing_from_opendata.geojson     — nœuds OSM (verre) sans correspondance
+                                       dans l'OpenData
 
 Variable d'environnement optionnelle :
   MATCH_THRESHOLD_M  (défaut : 50)  seuil d'appariement en mètres
@@ -60,7 +63,7 @@ EXPECTED_OPERATORS: dict[str, str] = {
 
 VALID_LOCATIONS = {"underground", "overground"}
 
-# Tags OSM complets à appliquer sur les bulles à créer dans OSM
+# Tags OSM à appliquer sur les bulles à créer dans OSM
 OSM_TAGS_TEMPLATE: dict[str, str] = {
     "amenity":                 "recycling",
     "recycling:glass_bottles": "yes",
@@ -69,21 +72,19 @@ OSM_TAGS_TEMPLATE: dict[str, str] = {
     "operator:fr":             "Bruxelles-Propreté",
     "operator:nl":             "Net Brussel",
     "operator:wikidata":       "Q23021854",
-    # "location" est ajouté dynamiquement selon la catégorie OpenData
 }
 
 
 # ── Structures de données ──────────────────────────────────────────────────────
 @dataclass
 class ODPoint:
-    """Un conteneur extrait de l'OpenData."""
     uid:          str
     lat:          float
     lon:          float
     address:      str
     municipality: str
     postalcode:   str
-    category:     str          # ex. "bulle aerienne couleur"
+    category:     str
     matched_osm_id:   Optional[int]   = None
     matched_osm_type: Optional[str]   = None
     match_dist_m:     Optional[float] = None
@@ -91,7 +92,6 @@ class ODPoint:
 
 @dataclass
 class OSMPoint:
-    """Un nœud/way OSM amenity=recycling + recycling:glass_bottles=yes."""
     osm_id:   int
     osm_type: str
     lat:      float
@@ -100,25 +100,24 @@ class OSMPoint:
     matched_od_uid: Optional[str]   = None
     match_dist_m:   Optional[float] = None
 
+    @property
+    def has_glass_tag(self) -> bool:
+        return self.tags.get("recycling:glass_bottles") == "yes"
+
 
 # ── Géométrie ──────────────────────────────────────────────────────────────────
 def haversine_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
-    """Distance orthodromique en mètres (formule de Haversine)."""
-    R = 6_371_000
-    φ1, φ2 = math.radians(lat1), math.radians(lat2)
+    R  = 6_371_000
+    φ1 = math.radians(lat1)
+    φ2 = math.radians(lat2)
     dφ = math.radians(lat2 - lat1)
     dλ = math.radians(lon2 - lon1)
     a  = math.sin(dφ / 2) ** 2 + math.cos(φ1) * math.cos(φ2) * math.sin(dλ / 2) ** 2
     return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
 
-# ── Détection du tag location depuis la catégorie OpenData ────────────────────
+# ── Détection du tag location ──────────────────────────────────────────────────
 def detect_location(category: str) -> Optional[str]:
-    """
-    "bulle aerienne ..."  →  location=overground
-    "bulle enterree ..."  →  location=underground
-    Inconnu               →  None (tag omis, à vérifier sur le terrain)
-    """
     c = (category.lower()
          .replace("é", "e").replace("è", "e").replace("ê", "e")
          .replace("à", "a").replace("â", "a"))
@@ -131,12 +130,12 @@ def detect_location(category: str) -> Optional[str]:
 
 # ── 1. Chargement OpenData ─────────────────────────────────────────────────────
 def fetch_opendata() -> list[ODPoint]:
-    print("📥  OpenData Brussels — téléchargement du GeoJSON …")
+    print("OpenData Brussels - telechargement du GeoJSON ...")
     try:
         r = requests.get(OPENDATA_GEOJSON, timeout=60)
         r.raise_for_status()
     except requests.RequestException as exc:
-        sys.exit(f"❌  Impossible de télécharger l'OpenData : {exc}")
+        sys.exit(f"Impossible de telecharger l'OpenData : {exc}")
 
     pts: list[ODPoint] = []
     for i, feat in enumerate(r.json().get("features", [])):
@@ -157,28 +156,29 @@ def fetch_opendata() -> list[ODPoint]:
                             or props.get("category_nl") or "").strip(),
         ))
 
-    print(f"     → {len(pts)} bulles chargées")
+    print(f"  -> {len(pts)} bulles chargees")
     return pts
 
 
 # ── 2. Lecture du PBF OSM ──────────────────────────────────────────────────────
-class GlassRecyclingHandler(osmium.SimpleHandler):
-    """Collecte les objets OSM : amenity=recycling + recycling:glass_bottles=yes."""
+class AllRecyclingHandler(osmium.SimpleHandler):
+    """
+    Collecte TOUS les nœuds/ways amenity=recycling, qu'ils aient ou non
+    recycling:glass_bottles=yes. Cela évite les faux-positifs "absent d'OSM"
+    quand le nœud existe mais manque juste le tag verre.
+    """
 
     def __init__(self):
         super().__init__()
         self.pts: list[OSMPoint] = []
 
     @staticmethod
-    def _is_glass_recycling(tags: dict) -> bool:
-        return (
-            tags.get("amenity") == "recycling"
-            and tags.get("recycling:glass_bottles") == "yes"
-        )
+    def _is_recycling(tags: dict) -> bool:
+        return tags.get("amenity") == "recycling"
 
     def node(self, n):
         tags = dict(n.tags)
-        if self._is_glass_recycling(tags):
+        if self._is_recycling(tags):
             self.pts.append(OSMPoint(
                 osm_id   = n.id,
                 osm_type = "node",
@@ -189,7 +189,7 @@ class GlassRecyclingHandler(osmium.SimpleHandler):
 
     def way(self, w):
         tags = dict(w.tags)
-        if not self._is_glass_recycling(tags):
+        if not self._is_recycling(tags):
             return
         try:
             valid = [(nd.lat, nd.lon) for nd in w.nodes if nd.location.valid()]
@@ -204,51 +204,65 @@ class GlassRecyclingHandler(osmium.SimpleHandler):
                     tags     = tags,
                 ))
         except Exception as exc:
-            print(f"     ⚠  way/{w.id} ignoré : {exc}")
+            print(f"  ! way/{w.id} ignore : {exc}")
 
 
 def fetch_osm(pbf: str) -> list[OSMPoint]:
     pbf = os.path.realpath(pbf)
     if not os.path.exists(pbf):
-        sys.exit(
-            f"❌  Fichier PBF introuvable : {pbf}\n"
-            "     Vérifiez que le checkout inclut le LFS."
-        )
+        sys.exit(f"Fichier PBF introuvable : {pbf}\nVerifiez que le checkout inclut le LFS.")
     size_mb = os.path.getsize(pbf) / 1_048_576
-    print(f"🔍  OSM PBF : {pbf}  ({size_mb:.1f} Mo)")
-    handler = GlassRecyclingHandler()
+    print(f"OSM PBF : {pbf}  ({size_mb:.1f} Mo)")
+    handler = AllRecyclingHandler()
     handler.apply_file(pbf, locations=True)
-    print(f"     → {len(handler.pts)} conteneurs verre trouvés dans OSM")
+    glass = sum(1 for p in handler.pts if p.has_glass_tag)
+    print(f"  -> {len(handler.pts)} noeuds amenity=recycling "
+          f"dont {glass} avec recycling:glass_bottles=yes")
     return handler.pts
 
 
 # ── 3. Appariement spatial ─────────────────────────────────────────────────────
 def spatial_match(od_list: list[ODPoint], osm_list: list[OSMPoint]) -> None:
-    """Appariement glouton plus proche voisin (1-1) dans un rayon de MATCH_THRESHOLD_M m."""
-    print(f"🔗  Appariement spatial (seuil = {MATCH_THRESHOLD_M} m) …")
-    used_osm_ids: set[int] = set()
+    """
+    Appariement 1-à-1 par distance croissante (globalement trié).
 
+    On trie d'abord TOUTES les paires candidates par distance avant
+    d'assigner, ce qui évite qu'un point traité tôt "vole" un nœud OSM
+    qui était bien plus proche d'un autre point OpenData.
+    """
+    print(f"Appariement spatial (seuil = {MATCH_THRESHOLD_M} m) ...")
+
+    # Calcul de toutes les paires dans le seuil
+    candidates: list[tuple[float, ODPoint, OSMPoint]] = []
     for od in od_list:
-        best_dist, best_osm = float("inf"), None
         for osm in osm_list:
-            if osm.osm_id in used_osm_ids:
-                continue
             d = haversine_m(od.lat, od.lon, osm.lat, osm.lon)
-            if d < best_dist:
-                best_dist, best_osm = d, osm
+            if d <= MATCH_THRESHOLD_M:
+                candidates.append((d, od, osm))
 
-        if best_osm is not None and best_dist <= MATCH_THRESHOLD_M:
-            od.matched_osm_id    = best_osm.osm_id
-            od.matched_osm_type  = best_osm.osm_type
-            od.match_dist_m      = round(best_dist, 1)
-            best_osm.matched_od_uid = od.uid
-            best_osm.match_dist_m   = round(best_dist, 1)
-            used_osm_ids.add(best_osm.osm_id)
+    # Tri par distance croissante → on apparie toujours la paire la plus proche en premier
+    candidates.sort(key=lambda x: x[0])
+
+    used_od:  set[str] = set()
+    used_osm: set[int] = set()
+
+    for d, od, osm in candidates:
+        if od.uid in used_od or osm.osm_id in used_osm:
+            continue
+        od.matched_osm_id    = osm.osm_id
+        od.matched_osm_type  = osm.osm_type
+        od.match_dist_m      = round(d, 1)
+        osm.matched_od_uid   = od.uid
+        osm.match_dist_m     = round(d, 1)
+        used_od.add(od.uid)
+        used_osm.add(osm.osm_id)
+
+    matched = len(used_od)
+    print(f"  -> {matched} paires appariees")
 
 
 # ── 4. Évaluation de la qualité des tags ──────────────────────────────────────
 def assess_tags(osm: OSMPoint) -> tuple[list[str], list[str]]:
-    """Retourne (erreurs_bloquantes, avertissements)."""
     errors:   list[str] = []
     warnings: list[str] = []
     t = osm.tags
@@ -256,7 +270,7 @@ def assess_tags(osm: OSMPoint) -> tuple[list[str], list[str]]:
     for key, expected in REQUIRED_TAGS.items():
         actual = t.get(key)
         if actual != expected:
-            errors.append(f"{key}={expected!r}  →  actuel : {actual!r}")
+            errors.append(f"{key}={expected!r}  ->  actuel : {actual!r}")
 
     loc = t.get("location")
     if loc is None:
@@ -269,28 +283,13 @@ def assess_tags(osm: OSMPoint) -> tuple[list[str], list[str]]:
         if actual is None:
             warnings.append(f"{key} absent (attendu : {expected!r})")
         elif actual != expected:
-            warnings.append(f"{key}={actual!r}  ≠  {expected!r}")
+            warnings.append(f"{key}={actual!r}  !=  {expected!r}")
 
     return errors, warnings
 
 
-# ── 5a. GeoJSON — bulles absentes d'OSM ───────────────────────────────────────
-def write_geojson_missing_from_osm(miss_osm: list[ODPoint]) -> str:
-    """GeoJSON prêt à l'emploi : tags OSM uniquement, rien d'autre."""
-    features = []
-    for b in sorted(miss_osm, key=lambda x: (x.postalcode, x.address)):
-        location = detect_location(b.category)
-        osm_tags: dict = {**OSM_TAGS_TEMPLATE}
-        if location:
-            osm_tags["location"] = location
-        features.append({
-            "type": "Feature",
-            "geometry": {
-                "type":        "Point",
-                "coordinates": [round(b.lon, 7), round(b.lat, 7)],
-            },
-            "properties": osm_tags,
-        })
+# ── 5. GeoJSON ─────────────────────────────────────────────────────────────────
+def _geojson(features: list) -> str:
     return json.dumps(
         {"type": "FeatureCollection", "features": features},
         ensure_ascii=False,
@@ -298,43 +297,84 @@ def write_geojson_missing_from_osm(miss_osm: list[ODPoint]) -> str:
     )
 
 
-# ── 5b. GeoJSON — nœuds OSM absents de l'OpenData ────────────────────────────
-def write_geojson_missing_from_opendata(miss_od: list[OSMPoint]) -> str:
-    """GeoJSON des nœuds OSM sans correspondance : tags OSM existants tels quels."""
+def geojson_missing_from_osm(pts: list[ODPoint]) -> str:
+    """OpenData bins sans aucun nœud amenity=recycling à proximité."""
     features = []
-    for b in miss_od:
+    for b in sorted(pts, key=lambda x: (x.postalcode, x.address)):
+        location = detect_location(b.category)
+        tags = {**OSM_TAGS_TEMPLATE}
+        if location:
+            tags["location"] = location
         features.append({
             "type": "Feature",
-            "geometry": {
-                "type":        "Point",
-                "coordinates": [round(b.lon, 7), round(b.lat, 7)],
-            },
+            "geometry": {"type": "Point",
+                         "coordinates": [round(b.lon, 7), round(b.lat, 7)]},
+            "properties": tags,
+        })
+    return _geojson(features)
+
+
+def geojson_needs_glass_tag(pairs: list[tuple[ODPoint, OSMPoint]]) -> str:
+    """
+    OpenData bins dont le nœud OSM apparié existe mais manque
+    recycling:glass_bottles=yes — à éditer dans OSM, pas à créer.
+    Les propriétés sont les tags OSM actuels du nœud existant.
+    """
+    features = []
+    for od, osm in sorted(pairs, key=lambda x: (x[0].postalcode, x[0].address)):
+        features.append({
+            "type": "Feature",
+            "geometry": {"type": "Point",
+                         "coordinates": [round(osm.lon, 7), round(osm.lat, 7)]},
+            "properties": dict(osm.tags),
+        })
+    return _geojson(features)
+
+
+def geojson_missing_from_opendata(pts: list[OSMPoint]) -> str:
+    """Nœuds OSM avec recycling:glass_bottles=yes sans correspondance OpenData."""
+    features = []
+    for b in pts:
+        features.append({
+            "type": "Feature",
+            "geometry": {"type": "Point",
+                         "coordinates": [round(b.lon, 7), round(b.lat, 7)]},
             "properties": dict(b.tags),
         })
-    return json.dumps(
-        {"type": "FeatureCollection", "features": features},
-        ensure_ascii=False,
-        indent=2,
-    )
+    return _geojson(features)
 
 
-# ── 5c. Rapport texte + JSON ───────────────────────────────────────────────────
+# ── 6. Rapport texte + JSON ────────────────────────────────────────────────────
 def write_reports(od_list: list[ODPoint], osm_list: list[OSMPoint]) -> None:
     by_osm_id: dict[int, OSMPoint] = {p.osm_id: p for p in osm_list}
 
-    miss_osm = [p for p in od_list  if p.matched_osm_id  is None]
-    miss_od  = [p for p in osm_list if p.matched_od_uid  is None]
-    matched  = [p for p in od_list  if p.matched_osm_id  is not None]
+    # Catégorisation des points OpenData
+    truly_missing:   list[ODPoint] = []   # aucun amenity=recycling à proximité
+    needs_glass_tag: list[tuple[ODPoint, OSMPoint]] = []  # nœud OSM existe mais manque glass tag
+    well_matched:    list[ODPoint] = []   # nœud OSM apparié avec recycling:glass_bottles=yes
+
+    for od in od_list:
+        if od.matched_osm_id is None:
+            truly_missing.append(od)
+        else:
+            osm = by_osm_id[od.matched_osm_id]
+            if osm.has_glass_tag:
+                well_matched.append(od)
+            else:
+                needs_glass_tag.append((od, osm))
+
+    # Points OSM (avec glass tag) sans correspondance OpenData
+    miss_od = [p for p in osm_list if p.has_glass_tag and p.matched_od_uid is None]
 
     now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     W   = 72
-    SEP = "═" * W
-    sep = "─" * W
+    SEP = "=" * W
+    sep = "-" * W
 
-    # Pré-calcul des évaluations de tags
+    # Tag quality sur les well_matched
     tag_results: list[tuple[ODPoint, OSMPoint, list[str], list[str]]] = []
     cnt_ok = cnt_warn = cnt_err = 0
-    for od in matched:
+    for od in well_matched:
         osm = by_osm_id[od.matched_osm_id]
         errs, warns = assess_tags(osm)
         if errs:
@@ -345,78 +385,102 @@ def write_reports(od_list: list[ODPoint], osm_list: list[OSMPoint]) -> None:
             cnt_ok   += 1
         tag_results.append((od, osm, errs, warns))
 
-    # ── Rapport texte ──────────────────────────────────────────────────────────
+    # ── Texte ──────────────────────────────────────────────────────────────────
     L: list[str] = [
         SEP,
-        "  BULLES À VERRE — OpenData Brussels ↔ OpenStreetMap",
+        "  BULLES A VERRE -- OpenData Brussels <-> OpenStreetMap",
         SEP,
-        f"  Généré le       : {now}",
+        f"  Genere le       : {now}",
         f"  Seuil spatial   : {MATCH_THRESHOLD_M} m",
         "",
-        f"  OpenData         : {len(od_list):4d} bulles",
-        f"  OSM              : {len(osm_list):4d} conteneurs verre "
-        f"(amenity=recycling + recycling:glass_bottles=yes)",
-        f"  Appariés         : {len(matched):4d}",
-        f"  Absents d'OSM    : {len(miss_osm):4d}  → missing_from_osm.geojson",
-        f"  Absents OpenData : {len(miss_od):4d}  → missing_from_opendata.geojson",
+        f"  OpenData                      : {len(od_list):4d} bulles",
+        f"  OSM (tous amenity=recycling)  : {len(osm_list):4d} noeuds",
+        f"  OSM (recycling:glass_bottles) : "
+        f"{sum(1 for p in osm_list if p.has_glass_tag):4d} noeuds",
+        "",
+        f"  Absents d'OSM (a creer)       : {len(truly_missing):4d}  "
+        f"-> missing_from_osm.geojson",
+        f"  Presents OSM mais tag manquant: {len(needs_glass_tag):4d}  "
+        f"-> needs_glass_tag.geojson",
+        f"  Absents OpenData              : {len(miss_od):4d}  "
+        f"-> missing_from_opendata.geojson",
+        f"  Bien apparies (glass tag OK)  : {len(well_matched):4d}",
         "",
     ]
 
-    # --- Section 1 : absents d'OSM ---
+    # --- Section 1 : vraiment absents d'OSM ---
     L += [
         sep,
-        f"  1. BULLES ABSENTES D'OSM ({len(miss_osm)})",
+        f"  1. BULLES ABSENTES D'OSM - A CREER ({len(truly_missing)})",
         sep,
-        f"  Présentes dans l'OpenData mais sans nœud OSM dans un rayon de {MATCH_THRESHOLD_M} m.",
+        f"  Aucun noeud amenity=recycling dans un rayon de {MATCH_THRESHOLD_M} m.",
         "",
     ]
-    for b in sorted(miss_osm, key=lambda x: (x.postalcode, x.address)):
+    for b in sorted(truly_missing, key=lambda x: (x.postalcode, x.address)):
         loc = detect_location(b.category)
         L += [
-            f"  • [{b.postalcode} {b.municipality}]  {b.address}",
-            f"    Catégorie   : {b.category}  →  location={loc or '?'}",
-            f"    Coordonnées : {b.lat:.6f}, {b.lon:.6f}",
+            f"  * [{b.postalcode} {b.municipality}]  {b.address}",
+            f"    Categorie   : {b.category}  ->  location={loc or '?'}",
+            f"    Coordonnees : {b.lat:.6f}, {b.lon:.6f}",
             f"    Carte OSM   : https://www.openstreetmap.org/"
             f"?mlat={b.lat}&mlon={b.lon}#map=19/{b.lat}/{b.lon}",
             "",
         ]
 
-    # --- Section 2 : absents de l'OpenData ---
+    # --- Section 2 : présents OSM mais tag manquant ---
     L += [
         sep,
-        f"  2. BULLES ABSENTES DE L'OPENDATA ({len(miss_od)})",
+        f"  2. PRESENTS DANS OSM MAIS MANQUENT recycling:glass_bottles=yes ({len(needs_glass_tag)})",
         sep,
-        "  Nœuds OSM sans correspondance dans l'OpenData officielle.",
+        "  Le noeud OSM existe et est dans le rayon, mais il manque le tag verre.",
+        "  -> A editer dans OSM, pas a creer.",
+        "",
+    ]
+    for od, osm in sorted(needs_glass_tag, key=lambda x: (x[0].postalcode, x[0].address)):
+        L += [
+            f"  * [{od.postalcode} {od.municipality}]  {od.address}",
+            f"    OSM {osm.osm_type}/{osm.osm_id}  (dist = {od.match_dist_m} m)",
+            f"    Tags actuels : { {k: v for k, v in list(osm.tags.items())[:8]} }",
+            f"    URL OSM : https://www.openstreetmap.org/{osm.osm_type}/{osm.osm_id}",
+            "",
+        ]
+
+    # --- Section 3 : absents de l'OpenData ---
+    L += [
+        sep,
+        f"  3. NOEUDS OSM ABSENTS DE L'OPENDATA ({len(miss_od)})",
+        sep,
+        "  Noeuds OSM avec recycling:glass_bottles=yes sans correspondance OpenData.",
         "",
     ]
     for b in miss_od:
         L += [
-            f"  • {b.osm_type}/{b.osm_id}  ({b.lat:.6f}, {b.lon:.6f})",
+            f"  * {b.osm_type}/{b.osm_id}  ({b.lat:.6f}, {b.lon:.6f})",
             f"    Tags    : { {k: v for k, v in list(b.tags.items())[:10]} }",
             f"    URL OSM : https://www.openstreetmap.org/{b.osm_type}/{b.osm_id}",
             "",
         ]
 
-    # --- Section 3 : qualité des tags ---
+    # --- Section 4 : qualité des tags ---
     L += [
         sep,
-        f"  3. QUALITÉ DES TAGS OSM — BULLES APPARIÉES ({len(matched)})",
+        f"  4. QUALITE DES TAGS OSM -- BULLES BIEN APPARIEES ({len(well_matched)})",
         sep,
-        f"  ✅  {cnt_ok} corrects  |  ⚠️   {cnt_warn} avertissements  |  ❌  {cnt_err} erreurs",
+        f"  OK : {cnt_ok}  |  Avertissements : {cnt_warn}  |  Erreurs : {cnt_err}",
         "",
     ]
     for od, osm, errs, warns in tag_results:
         if not errs and not warns:
             continue
-        status = "❌  ERREUR" if errs else "⚠️   AVERT."
+        status = "ERREUR" if errs else "AVERT."
         L += [
-            f"  {status} — {osm.osm_type}/{osm.osm_id}  (dist = {od.match_dist_m} m)",
+            f"  [{status}] {osm.osm_type}/{osm.osm_id}  (dist = {od.match_dist_m} m)",
             f"    OpenData : {od.address}, {od.postalcode} {od.municipality}",
             f"    OSM      : https://www.openstreetmap.org/{osm.osm_type}/{osm.osm_id}",
         ]
         if errs:
             L.append("    Tags requis incorrects :")
-            L += [f"      ✗  {e}" for e in errs]
+            L += [f"      x  {e}" for e in errs]
         if warns:
             L.append("    Avertissements :")
             L += [f"      ~  {w}" for w in warns]
@@ -424,37 +488,40 @@ def write_reports(od_list: list[ODPoint], osm_list: list[OSMPoint]) -> None:
 
     txt = "\n".join(L)
 
-    # ── Rapport JSON ───────────────────────────────────────────────────────────
-    json_tag_issues = []
-    for od, osm, errs, warns in tag_results:
-        if errs or warns:
-            json_tag_issues.append({
-                "osm_id":       osm.osm_id,
-                "osm_type":     osm.osm_type,
-                "osm_url":      f"https://www.openstreetmap.org/{osm.osm_type}/{osm.osm_id}",
-                "address":      od.address,
-                "municipality": od.municipality,
-                "postalcode":   od.postalcode,
-                "distance_m":   od.match_dist_m,
-                "all_tags":     dict(osm.tags),
-                "errors":       errs,
-                "warnings":     warns,
-            })
+    # ── JSON ───────────────────────────────────────────────────────────────────
+    json_tag_issues = [
+        {
+            "osm_id":       osm.osm_id,
+            "osm_type":     osm.osm_type,
+            "osm_url":      f"https://www.openstreetmap.org/{osm.osm_type}/{osm.osm_id}",
+            "address":      od.address,
+            "municipality": od.municipality,
+            "postalcode":   od.postalcode,
+            "distance_m":   od.match_dist_m,
+            "all_tags":     dict(osm.tags),
+            "errors":       errs,
+            "warnings":     warns,
+        }
+        for od, osm, errs, warns in tag_results
+        if errs or warns
+    ]
 
     jdata = {
         "generated_at":      now,
         "match_threshold_m": MATCH_THRESHOLD_M,
         "stats": {
-            "opendata_total":   len(od_list),
-            "osm_total":        len(osm_list),
-            "matched":          len(matched),
-            "missing_from_osm": len(miss_osm),
-            "missing_from_od":  len(miss_od),
-            "tag_ok":           cnt_ok,
-            "tag_warn":         cnt_warn,
-            "tag_err":          cnt_err,
+            "opendata_total":             len(od_list),
+            "osm_all_recycling":          len(osm_list),
+            "osm_glass_tagged":           sum(1 for p in osm_list if p.has_glass_tag),
+            "truly_missing_from_osm":     len(truly_missing),
+            "needs_glass_tag":            len(needs_glass_tag),
+            "missing_from_od":            len(miss_od),
+            "well_matched":               len(well_matched),
+            "tag_ok":                     cnt_ok,
+            "tag_warn":                   cnt_warn,
+            "tag_err":                    cnt_err,
         },
-        "missing_from_osm": [
+        "truly_missing_from_osm": [
             {
                 "lat":          b.lat,
                 "lon":          b.lon,
@@ -468,7 +535,21 @@ def write_reports(od_list: list[ODPoint], osm_list: list[OSMPoint]) -> None:
                     f"?mlat={b.lat}&mlon={b.lon}#map=19/{b.lat}/{b.lon}"
                 ),
             }
-            for b in sorted(miss_osm, key=lambda x: (x.postalcode, x.address))
+            for b in sorted(truly_missing, key=lambda x: (x.postalcode, x.address))
+        ],
+        "needs_glass_tag": [
+            {
+                "osm_id":       osm.osm_id,
+                "osm_type":     osm.osm_type,
+                "osm_url":      f"https://www.openstreetmap.org/{osm.osm_type}/{osm.osm_id}",
+                "od_address":   od.address,
+                "municipality": od.municipality,
+                "postalcode":   od.postalcode,
+                "distance_m":   od.match_dist_m,
+                "current_tags": dict(osm.tags),
+            }
+            for od, osm in sorted(needs_glass_tag,
+                                  key=lambda x: (x[0].postalcode, x[0].address))
         ],
         "missing_from_opendata": [
             {
@@ -484,14 +565,15 @@ def write_reports(od_list: list[ODPoint], osm_list: list[OSMPoint]) -> None:
         "tag_issues": json_tag_issues,
     }
 
-    # ── Écriture ───────────────────────────────────────────────────────────────
+    # ── Ecriture ───────────────────────────────────────────────────────────────
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
     files: dict[str, str] = {
         "report_glass_bins.txt":         txt,
         "report_glass_bins.json":        json.dumps(jdata, ensure_ascii=False, indent=2),
-        "missing_from_osm.geojson":      write_geojson_missing_from_osm(miss_osm),
-        "missing_from_opendata.geojson": write_geojson_missing_from_opendata(miss_od),
+        "missing_from_osm.geojson":      geojson_missing_from_osm(truly_missing),
+        "needs_glass_tag.geojson":       geojson_needs_glass_tag(needs_glass_tag),
+        "missing_from_opendata.geojson": geojson_missing_from_opendata(miss_od),
     }
 
     print()
@@ -500,7 +582,7 @@ def write_reports(od_list: list[ODPoint], osm_list: list[OSMPoint]) -> None:
         path = os.path.join(OUTPUT_DIR, fname)
         with open(path, "w", encoding="utf-8") as fh:
             fh.write(content)
-        print(f"📄  {path}")
+        print(f"-> {path}")
 
 
 # ── Point d'entrée ─────────────────────────────────────────────────────────────
