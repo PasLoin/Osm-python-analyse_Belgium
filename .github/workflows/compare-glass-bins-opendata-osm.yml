@@ -1,6 +1,6 @@
 name: "Bulles a verre - OpenData vs OSM"
 
-# Declenchement manuel uniquement (a la demande)
+# 
 on:
   workflow_dispatch:
     inputs:
@@ -20,11 +20,11 @@ jobs:
     timeout-minutes: 30
 
     steps:
-      - name: "Checkout du depot "
+      - name: "Checkout du depot"
         uses: actions/checkout@v5
         with:
           lfs: true       # 
-          fetch-depth: 1  # 
+          fetch-depth: 1  # h
 
       - name: "Mise en place de Python 3.11"
         uses: actions/setup-python@v5
@@ -51,5 +51,6 @@ jobs:
             amenity/report_glass_bins.txt
             amenity/report_glass_bins.json
             amenity/missing_from_osm.geojson
+            amenity/needs_glass_tag.geojson
             amenity/missing_from_opendata.geojson
           retention-days: 90
