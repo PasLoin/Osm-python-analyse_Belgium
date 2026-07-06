@@ -51,4 +51,5 @@ jobs:
             amenity/report_glass_bins.json
             amenity/missing_in_osm.geojson
             amenity/missing_in_opendata.geojson
+            amenity/tag_issues.geojson
           retention-days: 90
