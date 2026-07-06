@@ -401,32 +401,32 @@ def geojson_tag_issues(
     tag_results: list[tuple["ODPoint", "OSMPoint", list[str], list[str]]]
 ) -> str:
     """
-    Nœuds OSM appariés dont les tags posent problème (erreurs et/ou
-    avertissements). Chaque feature reprend :
-      - osm_existing_tags : les tags actuellement présents dans OSM
-      - expected_tags      : le jeu de tags complet attendu pour ce site
-      - errors / warnings  : le détail des écarts détectés
+    Nœuds OSM appariés dont les tags posent problème.
+
+    Les propriétés sont directement les tags CORRIGÉS, prêts à coller sur
+    le nœud existant dans JOSM/iD : on part des tags actuels du nœud (donc
+    tout tag non lié au recyclage — poubelle, papier, vêtements, etc. —
+    est conservé tel quel) et on corrige uniquement les clés en cause
+    (amenity, recycling*, operator*, location).
     """
     features = []
     for od, osm, errs, warns in tag_results:
         if not errs and not warns:
             continue
-        expected_tags = {**OSM_TAGS_TEMPLATE}
+
+        corrected = dict(osm.tags)          # tags existants, base de depart
+        corrected.update(REQUIRED_TAGS)     # corrige amenity / recycling* si besoin
+        corrected.update(EXPECTED_OPERATORS)  # corrige les tags operateur
+
         loc = detect_location(od.category)
         if loc:
-            expected_tags["location"] = loc
+            corrected["location"] = loc     # corrige/ajoute location si deductible
+
         features.append({
             "type": "Feature",
             "geometry": {"type": "Point",
                          "coordinates": [round(osm.lon, 7), round(osm.lat, 7)]},
-            "properties": {
-                "osm_existing_tags": dict(osm.tags),
-                "expected_tags":     expected_tags,
-                "errors":            errs,
-                "warnings":          warns,
-                "distance_m":        od.nearest_osm_dist,
-                "osm_url":           f"https://www.openstreetmap.org/{osm.osm_type}/{osm.osm_id}",
-            },
+            "properties": corrected,
         })
     return _geojson(features)
 
