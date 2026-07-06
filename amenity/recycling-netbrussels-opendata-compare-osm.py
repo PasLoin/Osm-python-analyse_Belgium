@@ -85,6 +85,10 @@ class ODPoint:
     matched_osm_id:   Optional[int]   = None
     matched_osm_type: Optional[str]   = None
     match_dist_m:     Optional[float] = None
+    # Nearest OSM node (matched or not) — pour diagnostic
+    nearest_osm_id:   Optional[int]   = None
+    nearest_osm_type: Optional[str]   = None
+    nearest_osm_dist: Optional[float] = None
 
 
 @dataclass
@@ -281,6 +285,19 @@ def spatial_match(od_list: list[ODPoint], osm_list: list[OSMPoint]) -> None:
 
     print(f"  -> {len(used_od)} paires appariees")
 
+    # Pour chaque point OD non apparié, enregistrer le nœud OSM le plus proche
+    # (qu'il soit déjà utilisé ou non) — utile pour le diagnostic.
+    for od in od_list:
+        best_d, best_osm = float("inf"), None
+        for osm in osm_list:
+            d = haversine_m(od.lat, od.lon, osm.lat, osm.lon)
+            if d < best_d:
+                best_d, best_osm = d, osm
+        if best_osm is not None:
+            od.nearest_osm_id   = best_osm.osm_id
+            od.nearest_osm_type = best_osm.osm_type
+            od.nearest_osm_dist = round(best_d, 1)
+
 
 # ── 4. Évaluation de la qualité des tags ──────────────────────────────────────
 def assess_tags(osm: OSMPoint) -> tuple[list[str], list[str]]:
@@ -407,8 +424,25 @@ def write_reports(od_list: list[ODPoint], osm_list: list[OSMPoint]) -> None:
             f"    Coordonnees : {b.lat:.6f}, {b.lon:.6f}",
             f"    Carte OSM   : https://www.openstreetmap.org/"
             f"?mlat={b.lat}&mlon={b.lon}#map=19/{b.lat}/{b.lon}",
-            "",
         ]
+        # Diagnostic : nœud OSM le plus proche, apparié ou non
+        if b.nearest_osm_id is not None:
+            nearest = by_osm_id.get(b.nearest_osm_id)
+            if nearest and nearest.matched_od_uid is not None:
+                # Ce nœud OSM a été pris par un autre point OpenData
+                matched_od = next((p for p in od_list if p.uid == nearest.matched_od_uid), None)
+                od_label = (f"{matched_od.address}, {matched_od.postalcode} {matched_od.municipality}"
+                            if matched_od else nearest.matched_od_uid)
+                L.append(
+                    f"    ! Noeud OSM le plus proche : {nearest.osm_type}/{nearest.nearest_osm_id or nearest.osm_id}"
+                    f" a {b.nearest_osm_dist} m — DEJA APPARIE a : {od_label}"
+                )
+            elif b.nearest_osm_dist is not None and b.nearest_osm_dist > MATCH_THRESHOLD_M:
+                L.append(
+                    f"    ! Noeud OSM le plus proche : {b.nearest_osm_dist} m"
+                    f" (hors seuil de {MATCH_THRESHOLD_M} m)"
+                )
+        L.append("")
 
     # --- Section 2 : missing in OpenData ---
     L += [
