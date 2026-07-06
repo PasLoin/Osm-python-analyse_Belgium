@@ -7,13 +7,27 @@ Comparaison des bulles à verre bruxelloises
 Fichiers produits (dans le même dossier que ce script) :
   report_glass_bins.txt          — rapport lisible
   report_glass_bins.json         — rapport structuré
-  missing_in_osm.geojson         — bulles OpenData absentes d'OSM,
-                                    tags OSM prêts à l'emploi
-  missing_in_opendata.geojson    — nœuds OSM absents de l'OpenData,
-                                    tags OSM existants tels quels
+  missing_in_osm.geojson         — bulles OpenData sans aucun nœud OSM
+                                    à proximité, tags OSM prêts à l'emploi
+  missing_in_opendata.geojson    — nœuds OSM sans aucun point OpenData
+                                    à proximité, tags OSM existants
 
 Variable d'environnement optionnelle :
-  MATCH_THRESHOLD_M  (défaut : 50)  seuil d'appariement en mètres
+  MATCH_THRESHOLD_M  (défaut : 50)  seuil de proximité en mètres
+
+── Note de conception (appariement) ──────────────────────────────────────────
+La classification "manquant" est faite par PRÉSENCE, pas par appariement
+exclusif 1-à-1 : pour chaque point OpenData, on cherche s'il existe AU MOINS
+UN nœud OSM (verre) dans le rayon, et vice-versa. Plusieurs points OpenData
+(ex. bulle "couleur" et bulle "blanche" du même site) peuvent légitimement
+pointer vers le même nœud OSM : OSM ne mappe parfois qu'un seul point pour
+un site qui contient plusieurs bulles physiques.
+Une exclusivité 1-à-1 stricte produit de faux "missing" dès que deux points
+OpenData proches partagent un même nœud OSM. C'est corrigé ici.
+
+La recherche du plus proche voisin utilise un index spatial (KDTree, via
+scipy.spatial.cKDTree) sur des coordonnées projetées en mètres
+(approximation équirectangulaire, valide à l'échelle d'une ville).
 """
 
 import json
@@ -26,6 +40,8 @@ from typing import Optional
 
 import osmium
 import requests
+import numpy as np
+from scipy.spatial import cKDTree
 
 # ── Chemins ────────────────────────────────────────────────────────────────────
 SCRIPT_DIR   = os.path.dirname(os.path.abspath(__file__))
@@ -41,7 +57,8 @@ OPENDATA_GEOJSON = (
 )
 
 # ── Paramètres ─────────────────────────────────────────────────────────────────
-MATCH_THRESHOLD_M = int(os.environ.get("MATCH_THRESHOLD_M", "50"))
+MATCH_THRESHOLD_M = float(os.environ.get("MATCH_THRESHOLD_M", "50"))
+DEDUP_RADIUS_M     = 2.0   # rayon de déduplication des doublons exacts OpenData
 
 # Tags OBLIGATOIRES pour un conteneur correctement tagué dans OSM
 REQUIRED_TAGS: dict[str, str] = {
@@ -82,10 +99,7 @@ class ODPoint:
     municipality: str
     postalcode:   str
     category:     str
-    matched_osm_id:   Optional[int]   = None
-    matched_osm_type: Optional[str]   = None
-    match_dist_m:     Optional[float] = None
-    # Nearest OSM node (matched or not) — pour diagnostic
+    # Nœud OSM le plus proche (non-exclusif : plusieurs OD peuvent partager le même)
     nearest_osm_id:   Optional[int]   = None
     nearest_osm_type: Optional[str]   = None
     nearest_osm_dist: Optional[float] = None
@@ -98,12 +112,28 @@ class OSMPoint:
     lat:      float
     lon:      float
     tags:     dict = field(default_factory=dict)
-    matched_od_uid: Optional[str]   = None
-    match_dist_m:   Optional[float] = None
+    # Point OpenData le plus proche (non-exclusif)
+    nearest_od_uid:  Optional[str]   = None
+    nearest_od_dist: Optional[float] = None
 
 
-# ── Géométrie ──────────────────────────────────────────────────────────────────
+# ── Projection équirectangulaire (mètres) ──────────────────────────────────────
+def make_projector(ref_lat: float):
+    """
+    Projection plane locale simple, valide pour de petites étendues
+    (échelle d'une ville). Erreur négligeable sur quelques km.
+    """
+    m_per_deg_lat = 110_540.0
+    m_per_deg_lon = 111_320.0 * math.cos(math.radians(ref_lat))
+
+    def project(lat: float, lon: float) -> tuple[float, float]:
+        return (lon * m_per_deg_lon, lat * m_per_deg_lat)
+
+    return project
+
+
 def haversine_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Conservé pour la déduplication (précision exacte, peu d'appels)."""
     R  = 6_371_000
     φ1 = math.radians(lat1)
     φ2 = math.radians(lat2)
@@ -113,17 +143,24 @@ def haversine_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
 
+# ── Détection du tag location ──────────────────────────────────────────────────
+def detect_location(category: str) -> Optional[str]:
+    c = (category.lower()
+         .replace("é", "e").replace("è", "e").replace("ê", "e")
+         .replace("à", "a").replace("â", "a"))
+    if "aerien" in c:
+        return "overground"
+    if "enterr" in c or "souterr" in c or "underground" in c:
+        return "underground"
+    return None
 
-# ── Déduplication OpenData ─────────────────────────────────────────────────────
-def deduplicate_opendata(pts: list[ODPoint], radius_m: float = 2.0) -> list[ODPoint]:
+
+# ── Déduplication OpenData (vrais doublons exacts uniquement) ─────────────────
+def deduplicate_opendata(pts: list[ODPoint], radius_m: float = DEDUP_RADIUS_M) -> list[ODPoint]:
     """
-    L'OpenData liste parfois le même conteneur physique deux fois :
-    une fois "couleur" et une fois "blanche". OSM n'a qu'un seul nœud.
-    Sans déduplication, l'une des deux entrées tombe toujours en
-    "missing in OSM" même quand le nœud est à 0 m.
-
-    On supprime les doublons dont les coordonnées sont distantes de
-    moins de radius_m mètres, en gardant la première occurrence.
+    Supprime uniquement les entrées OpenData quasi-identiques en coordonnées
+    (même conteneur physique décrit deux fois, ex. "couleur" + "blanche" à
+    la même position exacte). Ne touche pas aux bulles simplement voisines.
     """
     kept: list[ODPoint] = []
     absorbed: set[str] = set()
@@ -143,17 +180,6 @@ def deduplicate_opendata(pts: list[ODPoint], radius_m: float = 2.0) -> list[ODPo
         print(f"  -> {removed} doublon(s) OpenData supprimes "
               f"(meme emplacement a moins de {radius_m} m)")
     return kept
-
-# ── Détection du tag location ──────────────────────────────────────────────────
-def detect_location(category: str) -> Optional[str]:
-    c = (category.lower()
-         .replace("é", "e").replace("è", "e").replace("ê", "e")
-         .replace("à", "a").replace("â", "a"))
-    if "aerien" in c:
-        return "overground"
-    if "enterr" in c or "souterr" in c or "underground" in c:
-        return "underground"
-    return None
 
 
 # ── 1. Chargement OpenData ─────────────────────────────────────────────────────
@@ -190,10 +216,7 @@ def fetch_opendata() -> list[ODPoint]:
 
 # ── 2. Lecture du PBF OSM ──────────────────────────────────────────────────────
 class GlassRecyclingHandler(osmium.SimpleHandler):
-    """
-    Collecte uniquement les nœuds/ways avec :
-      amenity=recycling  ET  recycling:glass_bottles=yes
-    """
+    """Collecte : amenity=recycling ET recycling:glass_bottles=yes."""
 
     def __init__(self):
         super().__init__()
@@ -249,75 +272,74 @@ def fetch_osm(pbf: str) -> list[OSMPoint]:
     return handler.pts
 
 
-# ── 3. Appariement spatial ─────────────────────────────────────────────────────
+# ── 3. Appariement par plus-proche-voisin (KDTree, non-exclusif) ──────────────
 def spatial_match(od_list: list[ODPoint], osm_list: list[OSMPoint]) -> None:
     """
-    Appariement 1-à-1 trié globalement par distance croissante.
+    Pour chaque point OpenData : cherche le nœud OSM le plus proche (KDTree).
+    Pour chaque nœud OSM       : cherche le point OpenData le plus proche (KDTree).
 
-    Toutes les paires candidates sont calculées et triées avant toute
-    assignation, ce qui évite qu'un point traité tôt s'approprie un
-    nœud OSM qui était plus proche d'un autre point OpenData.
+    Les deux recherches sont indépendantes et NON exclusives : un même nœud
+    OSM peut être "le plus proche" pour plusieurs points OpenData différents
+    (cas réel d'un site avec plusieurs bulles physiques mais un seul nœud
+    OSM). C'est la présence d'un voisin sous le seuil qui détermine
+    "manquant", pas une réservation 1-à-1.
     """
-    print(f"Appariement spatial (seuil = {MATCH_THRESHOLD_M} m) ...")
+    print(f"Appariement spatial par KDTree (seuil = {MATCH_THRESHOLD_M} m) ...")
 
-    candidates: list[tuple[float, ODPoint, OSMPoint]] = []
-    for od in od_list:
-        for osm in osm_list:
-            d = haversine_m(od.lat, od.lon, osm.lat, osm.lon)
-            if d <= MATCH_THRESHOLD_M:
-                candidates.append((d, od, osm))
+    if not od_list or not osm_list:
+        print("  -> liste vide, rien a apparier")
+        return
 
-    candidates.sort(key=lambda x: x[0])
+    ref_lat   = sum(p.lat for p in osm_list) / len(osm_list)
+    project   = make_projector(ref_lat)
 
-    used_od:  set[str] = set()
-    used_osm: set[int] = set()
+    od_xy  = np.array([project(p.lat, p.lon) for p in od_list])
+    osm_xy = np.array([project(p.lat, p.lon) for p in osm_list])
 
-    for d, od, osm in candidates:
-        if od.uid in used_od or osm.osm_id in used_osm:
-            continue
-        od.matched_osm_id    = osm.osm_id
-        od.matched_osm_type  = osm.osm_type
-        od.match_dist_m      = round(d, 1)
-        osm.matched_od_uid   = od.uid
-        osm.match_dist_m     = round(d, 1)
-        used_od.add(od.uid)
-        used_osm.add(osm.osm_id)
+    osm_tree = cKDTree(osm_xy)
+    od_tree  = cKDTree(od_xy)
 
-    print(f"  -> {len(used_od)} paires appariees")
+    # OD -> nœud OSM le plus proche
+    dists, idxs = osm_tree.query(od_xy, k=1)
+    for od, d, idx in zip(od_list, dists, idxs):
+        if d <= MATCH_THRESHOLD_M:
+            osm = osm_list[idx]
+            od.nearest_osm_id   = osm.osm_id
+            od.nearest_osm_type = osm.osm_type
+            od.nearest_osm_dist = round(float(d), 1)
 
-    # Pour chaque point OD non apparié, enregistrer le nœud OSM le plus proche
-    # (qu'il soit déjà utilisé ou non) — utile pour le diagnostic.
-    for od in od_list:
-        best_d, best_osm = float("inf"), None
-        for osm in osm_list:
-            d = haversine_m(od.lat, od.lon, osm.lat, osm.lon)
-            if d < best_d:
-                best_d, best_osm = d, osm
-        if best_osm is not None:
-            od.nearest_osm_id   = best_osm.osm_id
-            od.nearest_osm_type = best_osm.osm_type
-            od.nearest_osm_dist = round(best_d, 1)
+    # OSM -> point OpenData le plus proche
+    dists, idxs = od_tree.query(osm_xy, k=1)
+    for osm, d, idx in zip(osm_list, dists, idxs):
+        if d <= MATCH_THRESHOLD_M:
+            od = od_list[idx]
+            osm.nearest_od_uid  = od.uid
+            osm.nearest_od_dist = round(float(d), 1)
+
+    n_od_matched  = sum(1 for p in od_list  if p.nearest_osm_id  is not None)
+    n_osm_matched = sum(1 for p in osm_list if p.nearest_od_uid  is not None)
+    print(f"  -> {n_od_matched}/{len(od_list)} points OpenData ont un noeud OSM a proximite")
+    print(f"  -> {n_osm_matched}/{len(osm_list)} noeuds OSM ont un point OpenData a proximite")
 
 
 # ── 4. Évaluation de la qualité des tags ──────────────────────────────────────
-def assess_tags(osm: OSMPoint) -> tuple[list[str], list[str]]:
+def assess_tags(tags: dict) -> tuple[list[str], list[str]]:
     errors:   list[str] = []
     warnings: list[str] = []
-    t = osm.tags
 
     for key, expected in REQUIRED_TAGS.items():
-        actual = t.get(key)
+        actual = tags.get(key)
         if actual != expected:
             errors.append(f"{key}={expected!r}  ->  actuel : {actual!r}")
 
-    loc = t.get("location")
+    loc = tags.get("location")
     if loc is None:
         warnings.append("location absent (attendu : 'underground' ou 'overground')")
     elif loc not in VALID_LOCATIONS:
         warnings.append(f"location={loc!r} — valeur inattendue")
 
     for key, expected in EXPECTED_OPERATORS.items():
-        actual = t.get(key)
+        actual = tags.get(key)
         if actual is None:
             warnings.append(f"{key} absent (attendu : {expected!r})")
         elif actual != expected:
@@ -353,7 +375,7 @@ def geojson_missing_in_osm(pts: list[ODPoint]) -> str:
 
 
 def geojson_missing_in_opendata(pts: list[OSMPoint]) -> str:
-    """Tags OSM existants tels quels pour les nœuds sans correspondance OpenData."""
+    """Tags OSM existants tels quels pour les nœuds sans point OpenData proche."""
     features = []
     for b in pts:
         features.append({
@@ -369,21 +391,22 @@ def geojson_missing_in_opendata(pts: list[OSMPoint]) -> str:
 def write_reports(od_list: list[ODPoint], osm_list: list[OSMPoint]) -> None:
     by_osm_id: dict[int, OSMPoint] = {p.osm_id: p for p in osm_list}
 
-    missing_in_osm = [p for p in od_list  if p.matched_osm_id  is None]
-    missing_in_od  = [p for p in osm_list if p.matched_od_uid  is None]
-    matched        = [p for p in od_list  if p.matched_osm_id  is not None]
+    missing_in_osm = [p for p in od_list  if p.nearest_osm_id is None]
+    missing_in_od  = [p for p in osm_list if p.nearest_od_uid is None]
+    matched        = [p for p in od_list  if p.nearest_osm_id is not None]
 
     now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     W   = 72
     SEP = "=" * W
     sep = "-" * W
 
-    # Tag quality
+    # Qualité des tags — un même nœud OSM peut apparaître pour plusieurs OD
+    # (site avec plusieurs bulles physiques, un seul nœud OSM). C'est voulu.
     tag_results: list[tuple[ODPoint, OSMPoint, list[str], list[str]]] = []
     cnt_ok = cnt_warn = cnt_err = 0
     for od in matched:
-        osm = by_osm_id[od.matched_osm_id]
-        errs, warns = assess_tags(osm)
+        osm = by_osm_id[od.nearest_osm_id]
+        errs, warns = assess_tags(osm.tags)
         if errs:
             cnt_err  += 1
         elif warns:
@@ -402,9 +425,13 @@ def write_reports(od_list: list[ODPoint], osm_list: list[OSMPoint]) -> None:
         "",
         f"  OpenData              : {len(od_list):4d} bulles",
         f"  OSM                   : {len(osm_list):4d} conteneurs verre",
-        f"  Apparies              : {len(matched):4d}",
+        f"  Avec voisin proche    : {len(matched):4d}",
         f"  Manquants in OSM      : {len(missing_in_osm):4d}  -> missing_in_osm.geojson",
         f"  Manquants in OpenData : {len(missing_in_od):4d}  -> missing_in_opendata.geojson",
+        "",
+        "  NB : plusieurs points OpenData peuvent partager le meme noeud OSM",
+        "  le plus proche (site avec plusieurs bulles physiques, un seul noeud",
+        "  OSM). Ce n'est pas une erreur de comptage.",
         "",
     ]
 
@@ -413,7 +440,7 @@ def write_reports(od_list: list[ODPoint], osm_list: list[OSMPoint]) -> None:
         sep,
         f"  1. MISSING IN OSM ({len(missing_in_osm)})",
         sep,
-        f"  Presents dans l'OpenData, aucun noeud OSM correspondant dans {MATCH_THRESHOLD_M} m.",
+        f"  Aucun noeud OSM (verre) trouve dans un rayon de {MATCH_THRESHOLD_M} m.",
         "",
     ]
     for b in sorted(missing_in_osm, key=lambda x: (x.postalcode, x.address)):
@@ -424,32 +451,15 @@ def write_reports(od_list: list[ODPoint], osm_list: list[OSMPoint]) -> None:
             f"    Coordonnees : {b.lat:.6f}, {b.lon:.6f}",
             f"    Carte OSM   : https://www.openstreetmap.org/"
             f"?mlat={b.lat}&mlon={b.lon}#map=19/{b.lat}/{b.lon}",
+            "",
         ]
-        # Diagnostic : nœud OSM le plus proche, apparié ou non
-        if b.nearest_osm_id is not None:
-            nearest = by_osm_id.get(b.nearest_osm_id)
-            if nearest and nearest.matched_od_uid is not None:
-                # Ce nœud OSM a été pris par un autre point OpenData
-                matched_od = next((p for p in od_list if p.uid == nearest.matched_od_uid), None)
-                od_label = (f"{matched_od.address}, {matched_od.postalcode} {matched_od.municipality}"
-                            if matched_od else nearest.matched_od_uid)
-                L.append(
-                    f"    ! Noeud OSM le plus proche : {nearest.osm_type}/{nearest.osm_id}"
-                    f" a {b.nearest_osm_dist} m — DEJA APPARIE a : {od_label}"
-                )
-            elif b.nearest_osm_dist is not None and b.nearest_osm_dist > MATCH_THRESHOLD_M:
-                L.append(
-                    f"    ! Noeud OSM le plus proche : {b.nearest_osm_dist} m"
-                    f" (hors seuil de {MATCH_THRESHOLD_M} m)"
-                )
-        L.append("")
 
     # --- Section 2 : missing in OpenData ---
     L += [
         sep,
         f"  2. MISSING IN OPENDATA ({len(missing_in_od)})",
         sep,
-        "  Noeuds OSM (recycling:glass_bottles=yes) sans correspondance OpenData.",
+        "  Noeuds OSM (recycling:glass_bottles=yes) sans point OpenData a proximite.",
         "",
     ]
     for b in missing_in_od:
@@ -463,7 +473,7 @@ def write_reports(od_list: list[ODPoint], osm_list: list[OSMPoint]) -> None:
     # --- Section 3 : tag quality ---
     L += [
         sep,
-        f"  3. QUALITE DES TAGS OSM -- BULLES APPARIEES ({len(matched)})",
+        f"  3. QUALITE DES TAGS OSM -- BULLES AVEC VOISIN PROCHE ({len(matched)})",
         sep,
         f"  OK : {cnt_ok}  |  Avertissements : {cnt_warn}  |  Erreurs : {cnt_err}",
         "",
@@ -473,7 +483,7 @@ def write_reports(od_list: list[ODPoint], osm_list: list[OSMPoint]) -> None:
             continue
         status = "ERREUR" if errs else "AVERT."
         L += [
-            f"  [{status}] {osm.osm_type}/{osm.osm_id}  (dist = {od.match_dist_m} m)",
+            f"  [{status}] {osm.osm_type}/{osm.osm_id}  (dist = {od.nearest_osm_dist} m)",
             f"    OpenData : {od.address}, {od.postalcode} {od.municipality}",
             f"    OSM      : https://www.openstreetmap.org/{osm.osm_type}/{osm.osm_id}",
         ]
@@ -492,14 +502,14 @@ def write_reports(od_list: list[ODPoint], osm_list: list[OSMPoint]) -> None:
         "generated_at":      now,
         "match_threshold_m": MATCH_THRESHOLD_M,
         "stats": {
-            "opendata_total":       len(od_list),
-            "osm_total":            len(osm_list),
-            "matched":              len(matched),
-            "missing_in_osm":       len(missing_in_osm),
-            "missing_in_opendata":  len(missing_in_od),
-            "tag_ok":               cnt_ok,
-            "tag_warn":             cnt_warn,
-            "tag_err":              cnt_err,
+            "opendata_total":      len(od_list),
+            "osm_total":           len(osm_list),
+            "with_nearby_match":   len(matched),
+            "missing_in_osm":      len(missing_in_osm),
+            "missing_in_opendata": len(missing_in_od),
+            "tag_ok":              cnt_ok,
+            "tag_warn":            cnt_warn,
+            "tag_err":             cnt_err,
         },
         "missing_in_osm": [
             {
@@ -536,7 +546,7 @@ def write_reports(od_list: list[ODPoint], osm_list: list[OSMPoint]) -> None:
                 "address":      od.address,
                 "municipality": od.municipality,
                 "postalcode":   od.postalcode,
-                "distance_m":   od.match_dist_m,
+                "distance_m":   od.nearest_osm_dist,
                 "all_tags":     dict(osm.tags),
                 "errors":       errs,
                 "warnings":     warns,
