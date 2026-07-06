@@ -323,29 +323,39 @@ def spatial_match(od_list: list[ODPoint], osm_list: list[OSMPoint]) -> None:
 
 
 # ── 4. Évaluation de la qualité des tags ──────────────────────────────────────
-def assess_tags(tags: dict) -> tuple[list[str], list[str]]:
-    errors:   list[str] = []
-    warnings: list[str] = []
+def assess_tags(tags: dict, expected_location: Optional[str] = None) -> tuple[list[str], list[str]]:
+    """
+    expected_location : valeur 'underground'/'overground' déduite de la
+    catégorie OpenData (bulle aerienne / bulle enterree), utilisée pour
+    enrichir le message si le tag location est absent dans OSM.
+
+    Les avertissements liés à l'opérateur sont placés en premier dans la
+    liste retournée (plus prioritaires à corriger que le tag location).
+    """
+    errors:            list[str] = []
+    operator_warnings: list[str] = []
+    other_warnings:    list[str] = []
 
     for key, expected in REQUIRED_TAGS.items():
         actual = tags.get(key)
         if actual != expected:
             errors.append(f"{key}={expected!r}  ->  actuel : {actual!r}")
 
-    loc = tags.get("location")
-    if loc is None:
-        warnings.append("location absent (attendu : 'underground' ou 'overground')")
-    elif loc not in VALID_LOCATIONS:
-        warnings.append(f"location={loc!r} — valeur inattendue")
-
     for key, expected in EXPECTED_OPERATORS.items():
         actual = tags.get(key)
         if actual is None:
-            warnings.append(f"{key} absent (attendu : {expected!r})")
+            operator_warnings.append(f"{key} absent (attendu : {expected!r})")
         elif actual != expected:
-            warnings.append(f"{key}={actual!r}  !=  {expected!r}")
+            operator_warnings.append(f"{key}={actual!r}  !=  {expected!r}")
 
-    return errors, warnings
+    loc = tags.get("location")
+    if loc is None:
+        hint = f" — d'après l'OpenData, attendu : {expected_location!r}" if expected_location else ""
+        other_warnings.append(f"location absent (attendu : 'underground' ou 'overground'){hint}")
+    elif loc not in VALID_LOCATIONS:
+        other_warnings.append(f"location={loc!r} — valeur inattendue")
+
+    return errors, operator_warnings + other_warnings
 
 
 # ── 5. GeoJSON ─────────────────────────────────────────────────────────────────
@@ -387,6 +397,40 @@ def geojson_missing_in_opendata(pts: list[OSMPoint]) -> str:
     return _geojson(features)
 
 
+def geojson_tag_issues(
+    tag_results: list[tuple["ODPoint", "OSMPoint", list[str], list[str]]]
+) -> str:
+    """
+    Nœuds OSM appariés dont les tags posent problème (erreurs et/ou
+    avertissements). Chaque feature reprend :
+      - osm_existing_tags : les tags actuellement présents dans OSM
+      - expected_tags      : le jeu de tags complet attendu pour ce site
+      - errors / warnings  : le détail des écarts détectés
+    """
+    features = []
+    for od, osm, errs, warns in tag_results:
+        if not errs and not warns:
+            continue
+        expected_tags = {**OSM_TAGS_TEMPLATE}
+        loc = detect_location(od.category)
+        if loc:
+            expected_tags["location"] = loc
+        features.append({
+            "type": "Feature",
+            "geometry": {"type": "Point",
+                         "coordinates": [round(osm.lon, 7), round(osm.lat, 7)]},
+            "properties": {
+                "osm_existing_tags": dict(osm.tags),
+                "expected_tags":     expected_tags,
+                "errors":            errs,
+                "warnings":          warns,
+                "distance_m":        od.nearest_osm_dist,
+                "osm_url":           f"https://www.openstreetmap.org/{osm.osm_type}/{osm.osm_id}",
+            },
+        })
+    return _geojson(features)
+
+
 # ── 6. Rapport texte + JSON ────────────────────────────────────────────────────
 def write_reports(od_list: list[ODPoint], osm_list: list[OSMPoint]) -> None:
     by_osm_id: dict[int, OSMPoint] = {p.osm_id: p for p in osm_list}
@@ -406,7 +450,7 @@ def write_reports(od_list: list[ODPoint], osm_list: list[OSMPoint]) -> None:
     cnt_ok = cnt_warn = cnt_err = 0
     for od in matched:
         osm = by_osm_id[od.nearest_osm_id]
-        errs, warns = assess_tags(osm.tags)
+        errs, warns = assess_tags(osm.tags, expected_location=detect_location(od.category))
         if errs:
             cnt_err  += 1
         elif warns:
@@ -428,6 +472,7 @@ def write_reports(od_list: list[ODPoint], osm_list: list[OSMPoint]) -> None:
         f"  Avec voisin proche    : {len(matched):4d}",
         f"  Manquants in OSM      : {len(missing_in_osm):4d}  -> missing_in_osm.geojson",
         f"  Manquants in OpenData : {len(missing_in_od):4d}  -> missing_in_opendata.geojson",
+        f"  Tags a corriger       : {cnt_warn + cnt_err:4d}  -> tag_issues.geojson",
         "",
         "  NB : plusieurs points OpenData peuvent partager le meme noeud OSM",
         "  le plus proche (site avec plusieurs bulles physiques, un seul noeud",
@@ -564,6 +609,7 @@ def write_reports(od_list: list[ODPoint], osm_list: list[OSMPoint]) -> None:
         "report_glass_bins.json":       json.dumps(jdata, ensure_ascii=False, indent=2),
         "missing_in_osm.geojson":       geojson_missing_in_osm(missing_in_osm),
         "missing_in_opendata.geojson":  geojson_missing_in_opendata(missing_in_od),
+        "tag_issues.geojson":           geojson_tag_issues(tag_results),
     }
 
     print()
