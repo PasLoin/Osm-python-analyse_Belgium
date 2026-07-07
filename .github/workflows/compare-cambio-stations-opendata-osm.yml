@@ -1,0 +1,55 @@
+name: "Stations Cambio - Bruxelles vs OSM"
+
+on:
+  workflow_dispatch:
+    inputs:
+      match_threshold_m:
+        description: "Seuil d'appariement spatial (metres)"
+        required: false
+        default: "100"
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  compare:
+    name: "Comparaison Cambio vs OSM"
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: "Checkout du depot (LFS active)"
+        uses: actions/checkout@v5
+        with:
+          lfs: true
+          fetch-depth: 1
+
+      - name: "Mise en place de Python 3.11"
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: "Installation des dependances Python"
+        run: |
+          pip install --upgrade pip
+          pip install osmium requests numpy scipy
+
+      - name: "Comparaison Cambio vs OSM"
+        env:
+          MATCH_THRESHOLD_M: ${{ inputs.match_threshold_m }}
+        run: |
+          python amenity/cambio-brussels-opendata-compare-osm.py
+
+      - name: "Upload des rapports (artefacts)"
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: "cambio-stations-report-${{ github.run_number }}"
+          path: |
+            amenity/report_cambio_stations.txt
+            amenity/report_cambio_stations.json
+            amenity/missing_in_osm.geojson
+            amenity/missing_in_opendata.geojson
+            amenity/tag_issues.geojson
+          retention-days: 90
