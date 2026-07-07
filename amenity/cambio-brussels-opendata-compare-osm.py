@@ -47,7 +47,7 @@ EXPECTED_ATTRS = {
     "operator:short":     "Cambio",
     "operator:type":      "private",
     "operator:wikidata":  "Q1028155",
-    "operator:wikipedia": "de:Cambio CarSharing",
+    "operator:wikipedia": "en:Cambio CarSharing",
     "short_name":         "Cambio",
 }
 
@@ -345,10 +345,12 @@ def geojson_missing_in_osm(pts: list[CambioPoint]) -> str:
     for p in sorted(pts, key=lambda x: (x.postalcode, x.street)):
         name_fr, name_nl = split_bilingual_name(p.name)
         tags: dict = {**REQUIRED_TAGS, **EXPECTED_ATTRS}
-        tags["name"]    = p.name if name_fr == name_nl else f"{name_fr} - {name_nl}"
-        tags["name:fr"] = name_fr
-        tags["name:nl"] = name_nl
-        tags["ref"]     = p.station_id
+        if name_fr == name_nl:
+            tags["name"] = name_fr
+        else:
+            tags["name"]    = f"{name_fr} - {name_nl}"
+            tags["name:fr"] = name_fr
+            tags["name:nl"] = name_nl
         if p.vehicle_count:
             tags["capacity"] = str(p.vehicle_count)
         features.append({
