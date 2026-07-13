@@ -62,9 +62,6 @@ jobs:
             --timeout "${TIMEOUT_SECONDS}" \
             --limit "${MAX_POIS}"
 
-      - name: Afficher le résumé dans le job
-        run: cat summary.md >> "$GITHUB_STEP_SUMMARY"
-
       - name: Publier les rapports en artefact
         uses: actions/upload-artifact@v4
         with:
