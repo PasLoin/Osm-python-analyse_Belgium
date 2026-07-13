@@ -18,7 +18,7 @@ from urllib.parse import urlparse
 
 import aiohttp
 
-USER_AGENT = "osm-website-checker/1.0 (+https://github.com/PasLoin/Osm-python-analyse_Belgium/)"
+USER_AGENT = "osm-website-checker/1.0 (+https://github.com/PasLoin/Osm-python-analyse_Belgium)"
 
 # Codes HTTP typiques d'une protection anti-bot (Cloudflare, WAF, rate limiting...)
 # plutôt que d'un site réellement mort. On ne veut pas les remonter comme "à corriger" :
@@ -45,11 +45,36 @@ def osm_link(osm_type: str, osm_id: int) -> str:
     return f"https://www.openstreetmap.org/{osm_type}/{osm_id}"
 
 
+def decode_osm_id(raw_id: str):
+    """Traduit l'id produit par `osmium export --add-unique-id=type_id` en (osm_type, osm_id).
+
+    - "n123"/"w123"/"r123" -> id OSM réel, direct.
+    - "a123" -> id encodé par osmium pour les géométries "area" (assemblées à partir
+      d'un way fermé ou d'une relation multipolygon), PAS un id OSM réel :
+        area_id pair  -> way,      id_way      = area_id // 2
+        area_id impair-> relation, id_relation = (area_id - 1) // 2
+      cf. https://docs.osmcode.org/osmium/latest/osmium-export.html
+    """
+    type_map = {"n": "node", "w": "way", "r": "relation"}
+    if raw_id and raw_id[0] in type_map:
+        return type_map[raw_id[0]], raw_id[1:]
+    if raw_id and raw_id[0] == "a":
+        try:
+            area_num = int(raw_id[1:])
+        except ValueError:
+            return "node", raw_id
+        if area_num % 2 == 0:
+            return "way", str(area_num // 2)
+        return "relation", str((area_num - 1) // 2)
+    return "node", raw_id
+
+
 def load_pois(geojson_path: str):
     """Lit le GeoJSON produit par osmium export et renvoie une liste de POI à tester."""
     with open(geojson_path, encoding="utf-8") as f:
         data = json.load(f)
 
+    seen = set()  # (osm_type, osm_id, tag_key, url) pour dédupliquer way vs area du même objet
     pois = []
     for feature in data["features"]:
         props = feature.get("properties", {})
@@ -58,12 +83,7 @@ def load_pois(geojson_path: str):
         # osmium export met généralement le type/id dans "@id" (ex: "n123456") ou dans "id"
         raw_id = props.get("@id") or props.get("id") or feature.get("id", "")
         raw_id = str(raw_id)
-        type_map = {"n": "node", "w": "way", "r": "relation"}
-        if raw_id and raw_id[0] in type_map:
-            osm_type = type_map[raw_id[0]]
-            osm_id = raw_id[1:]
-        else:
-            osm_type, osm_id = "node", raw_id
+        osm_type, osm_id = decode_osm_id(raw_id)
 
         name = tags.get("name", "(sans nom)")
 
@@ -72,6 +92,12 @@ def load_pois(geojson_path: str):
             if not raw_url:
                 continue
             url = normalize_url(raw_url)
+
+            dedup_key = (osm_type, osm_id, tag_key, url)
+            if dedup_key in seen:
+                continue  # même objet déjà vu (ex: exporté à la fois comme way et comme area)
+            seen.add(dedup_key)
+
             pois.append(
                 {
                     "osm_type": osm_type,
