@@ -18,7 +18,12 @@ from urllib.parse import urlparse
 
 import aiohttp
 
-USER_AGENT = "osm-website-checker/1.0 (+https://github.com/PasLoin/Osm-python-analyse_Belgium)"
+USER_AGENT = "osm-website-checker/1.0 (+https://github.com/PasLoin/Osm-python-analyse_Belgium/)"
+
+# Codes HTTP typiques d'une protection anti-bot (Cloudflare, WAF, rate limiting...)
+# plutôt que d'un site réellement mort. On ne veut pas les remonter comme "à corriger" :
+# ce qu'on cherche, ce sont les sites/pages qui n'existent plus (404, DNS mort, etc.).
+BOT_PROTECTION_CODES = {403, 429}
 
 
 def normalize_url(raw: str) -> str | None:
@@ -100,8 +105,14 @@ async def check_one(session: aiohttp.ClientSession, poi: dict, sem: asyncio.Sema
                     # certains serveurs refusent HEAD (405/501) : on retente en GET
                     if method == "HEAD" and code in (405, 501):
                         continue
+                    if code < 400:
+                        status = "ok"
+                    elif code in BOT_PROTECTION_CODES:
+                        status = "skipped_bot_protection"
+                    else:
+                        status = "error"
                     result.update(
-                        status="ok" if code < 400 else "error",
+                        status=status,
                         http_code=code,
                         final_url=str(resp.url),
                         error=None,
@@ -150,7 +161,8 @@ def write_summary(results: list, summary_path: str, geojson_source: str, total_e
         by_status.setdefault(r["status"], []).append(r)
 
     n_ok = len(by_status.get("ok", []))
-    n_problem = total - n_ok
+    n_skipped = len(by_status.get("skipped_bot_protection", []))
+    n_problem = total - n_ok - n_skipped
 
     lines = []
     lines.append(f"# Rapport de vérification des sites web OSM\n")
@@ -162,7 +174,8 @@ def write_summary(results: list, summary_path: str, geojson_source: str, total_e
     else:
         lines.append(f"- POI testés : **{total}**")
     lines.append(f"- OK (2xx/3xx) : **{n_ok}**")
-    lines.append(f"- À vérifier : **{n_problem}**\n")
+    lines.append(f"- Ignorés, probable protection anti-bot (403/429) : **{n_skipped}**")
+    lines.append(f"- À vérifier (site/page probablement mort) : **{n_problem}**\n")
 
     lines.append("## Répartition par statut\n")
     lines.append("| Statut | Nombre |")
@@ -171,7 +184,7 @@ def write_summary(results: list, summary_path: str, geojson_source: str, total_e
         lines.append(f"| {status} | {len(items)} |")
     lines.append("")
 
-    problems = [r for r in results if r["status"] != "ok"]
+    problems = [r for r in results if r["status"] not in ("ok", "skipped_bot_protection")]
     problems.sort(key=lambda r: (r["status"], r["name"]))
 
     if problems:
@@ -187,6 +200,20 @@ def write_summary(results: list, summary_path: str, geojson_source: str, total_e
             )
     else:
         lines.append("Aucun problème détecté. 🎉")
+
+    skipped = [r for r in results if r["status"] == "skipped_bot_protection"]
+    if skipped:
+        skipped.sort(key=lambda r: r["name"])
+        lines.append("\n## Ignorés — probable protection anti-bot (403/429)\n")
+        lines.append("Ces sites répondent mais bloquent les requêtes automatisées ; ce n'est probablement pas un problème OSM.\n")
+        lines.append("| Nom | Code | Tag | URL | Fiche OSM |")
+        lines.append("|---|---|---|---|---|")
+        for r in skipped:
+            osm_url = osm_link(r["osm_type"], r["osm_id"])
+            url_display = (r["url"] or r["raw_value"] or "").replace("|", "\\|")
+            lines.append(
+                f"| {r['name']} | {r['http_code']} | {r['tag']} | {url_display} | [{r['osm_type']}/{r['osm_id']}]({osm_url}) |"
+            )
 
     with open(summary_path, "w", encoding="utf-8") as f:
         f.write("\n".join(lines) + "\n")
