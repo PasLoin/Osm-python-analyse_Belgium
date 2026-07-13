@@ -23,7 +23,7 @@ USER_AGENT = "osm-website-checker/1.0 (+https://github.com/PasLoin/Osm-python-an
 # Codes HTTP typiques d'une protection anti-bot (Cloudflare, WAF, rate limiting...)
 # plutôt que d'un site réellement mort. On ne veut pas les remonter comme "à corriger" :
 # ce qu'on cherche, ce sont les sites/pages qui n'existent plus (404, DNS mort, etc.).
-BOT_PROTECTION_CODES = {403, 429}
+BOT_PROTECTION_CODES = {403, 429, 405}
 
 
 def normalize_url(raw: str) -> str | None:
