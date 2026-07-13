@@ -1,0 +1,76 @@
+name: Vérification des sites web OSM
+
+on:
+  workflow_dispatch:
+    inputs:
+      pbf_url:
+        description: "URL (raw) du fichier .osm.pbf à analyser"
+        required: false
+        default: "https://raw.githubusercontent.com/PasLoin/Osm-python-analyse_Belgium/main/pbf_analyse/history/Brussels-daily.pbf"
+      max_pois:
+        description: "Nombre max de POI à tester (0 = pas de limite, pratique pour un premier essai)"
+        required: false
+        default: "50"
+      concurrency:
+        description: "Nombre de requêtes HTTP simultanées"
+        required: false
+        default: "20"
+      timeout_seconds:
+        description: "Timeout par requête (secondes)"
+        required: false
+        default: "15"
+
+permissions:
+  contents: read
+
+jobs:
+  check-websites:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    env:
+      PBF_URL: ${{ github.event.inputs.pbf_url }}
+      MAX_POIS: ${{ github.event.inputs.max_pois }}
+      CONCURRENCY: ${{ github.event.inputs.concurrency }}
+      TIMEOUT_SECONDS: ${{ github.event.inputs.timeout_seconds }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Installer osmium-tool
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y osmium-tool
+
+      - name: Installer les dépendances Python
+        run: pip install aiohttp
+
+      - name: Télécharger le PBF
+        run: |
+          echo "Téléchargement de ${PBF_URL}"
+          curl -L --fail -o input.osm.pbf "${PBF_URL}"
+          ls -lh input.osm.pbf
+
+      - name: Extraire les POI avec website / contact:website (GeoJSON)
+        run: |
+          chmod +x QA/website/extract_pois.sh
+          ./QA/website/extract_pois.sh input.osm.pbf pois.geojson
+
+      - name: Vérifier les URLs
+        run: |
+          python3 QA/website/check_urls.py pois.geojson report.csv summary.md \
+            --concurrency "${CONCURRENCY}" \
+            --timeout "${TIMEOUT_SECONDS}" \
+            --limit "${MAX_POIS}"
+
+      - name: Afficher le résumé dans le job
+        run: cat summary.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Publier les rapports en artefact
+        uses: actions/upload-artifact@v4
+        with:
+          name: osm-website-report-${{ github.run_id }}
+          path: |
+            pois.geojson
+            report.csv
+            summary.md
+          retention-days: 90
