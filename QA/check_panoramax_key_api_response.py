@@ -1,51 +1,69 @@
-#### check if a panoramax key response of api is not empty (picture removed or not uploaded even UID is correct)
-
 import requests
 import time
 import logging
 import json
+import os
 from typing import List
+import osmium
 
-# Configuration
-OVERPASS_URL = "http://overpass-api.de/api/interpreter"
+PBF_URL = "https://raw.githubusercontent.com/PasLoin/Osm-python-analyse_Belgium/main/pbf_analyse/history/Brussels-daily.pbf"
+PBF_FILE = "Brussels-daily.pbf"
 PANORAMAX_API_URL = "https://api.panoramax.xyz/api/search?ids="
-DELAY_SECONDS = 0.2  # délai entre les requêtes à l'API
+DELAY_SECONDS = 0.2
 LOG_FILE = "errors.log"
 NO_HD_FILE = "no_hd_found.jsonl"
 
-# Setup logging
+HEADERS = {
+    "User-Agent": "panoramax-checker/1.0",
+}
+
 logging.basicConfig(filename=LOG_FILE, level=logging.ERROR, format='%(asctime)s %(levelname)s: %(message)s')
 
-def fetch_panoramax_ids() -> List[str]:
-    """Effectue une requête Overpass pour récupérer les valeurs de la clé panoramax=*."""
-    query = """
-    [out:json];
-    area["name"="Région de Bruxelles-Capitale - Brussels Hoofdstedelijk Gewest"]->.searchArea;
-    (
-      node["panoramax"](area.searchArea);
-      way["panoramax"](area.searchArea);
-      relation["panoramax"](area.searchArea);
-    );
-    out body;
-    """
-    response = requests.post(OVERPASS_URL, data={'data': query})
-    response.raise_for_status()
-    data = response.json()
 
-    ids = []
-    for element in data.get('elements', []):
-        panoramax_id = element.get('tags', {}).get('panoramax')
-        if panoramax_id:
-            ids.append(panoramax_id)
-    return ids
+class PanoramaxHandler(osmium.SimpleHandler):
+    def __init__(self):
+        super().__init__()
+        self.ids = set()
+
+    def node(self, n):
+        self._check(n.tags)
+
+    def way(self, w):
+        self._check(w.tags)
+
+    def relation(self, r):
+        self._check(r.tags)
+
+    def _check(self, tags):
+        if "panoramax" in tags:
+            for value in tags["panoramax"].split(";"):
+                value = value.strip()
+                if value:
+                    self.ids.add(value)
+
+
+def download_pbf():
+    if os.path.exists(PBF_FILE):
+        return
+    response = requests.get(PBF_URL, headers=HEADERS, timeout=120)
+    response.raise_for_status()
+    with open(PBF_FILE, "wb") as f:
+        f.write(response.content)
+
+
+def fetch_panoramax_ids() -> List[str]:
+    download_pbf()
+    handler = PanoramaxHandler()
+    handler.apply_file(PBF_FILE)
+    return list(handler.ids)
+
 
 def query_panoramax_api(pano_ids: List[str]):
-    """Interroge l'API Panoramax avec les IDs donnés et vérifie la présence d'une image HD."""
     with open(NO_HD_FILE, "w", encoding="utf-8") as outfile:
         for pano_id in pano_ids:
             url = f"{PANORAMAX_API_URL}{pano_id}"
             try:
-                response = requests.get(url)
+                response = requests.get(url, headers=HEADERS, timeout=30)
                 if not response.ok:
                     logging.error(f"Erreur HTTP {response.status_code} pour l'ID {pano_id}: {response.text}")
                     outfile.write(json.dumps({
@@ -84,11 +102,13 @@ def query_panoramax_api(pano_ids: List[str]):
                 }) + "\n")
             time.sleep(DELAY_SECONDS)
 
+
 def main():
-    print("Récupération des IDs Panoramax...")
+    print("Récupération des IDs Panoramax depuis le PBF...")
     pano_ids = fetch_panoramax_ids()
     print(f"{len(pano_ids)} ID(s) récupéré(s). Lancement des requêtes API.")
     query_panoramax_api(pano_ids)
+
 
 if __name__ == "__main__":
     main()
