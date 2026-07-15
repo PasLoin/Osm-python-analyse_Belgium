@@ -1,4 +1,4 @@
-curl -s "https://panoramax.osm.be/api/collections?format=rss&limit=100" | python3 -c "
+curl -s "https://panoramax.osm.be/api/collections?format=rss&limit=10" | python3 -c "
 import sys, re, html
 xml = sys.stdin.read()
 items = re.findall(r'<item>.*?</item>', xml, re.S)
