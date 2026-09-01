@@ -1,0 +1,47 @@
+name: Brussels PBF to Parquet
+
+on:
+  schedule:
+    - cron: '0 11 * * *'
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: brussels-pbf-to-parquet
+  cancel-in-progress: false
+
+jobs:
+  convert:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Install QuackOSM
+        run: |
+          python -m pip install --upgrade pip
+          pip install quackosm
+
+      - name: Convert PBF to GeoParquet
+        run: python parquet/convert_to_parquet.py
+
+      - name: Commit and push result
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add parquet/brussels-latest.parquet
+          if git diff --cached --quiet; then
+            echo "Aucun changement à committer."
+          else
+            git commit -m "chore(parquet): mise à jour Bruxelles $(date -u +'%Y-%m-%d')"
+            git push
+          fi
