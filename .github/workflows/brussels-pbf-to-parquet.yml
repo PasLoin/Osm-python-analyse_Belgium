@@ -29,7 +29,8 @@ jobs:
       - name: Install QuackOSM
         run: |
           python -m pip install --upgrade pip
-          pip install quackosm
+          pip install quackosm "duckdb==1.5.6"
+              
 
       - name: Convert PBF to GeoParquet
         run: python parquet/convert_to_parquet.py
