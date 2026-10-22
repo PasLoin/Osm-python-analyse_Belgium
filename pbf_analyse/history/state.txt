@@ -1,8 +1,8 @@
 {
-  "uuid": "014dee21-72e0-4c92-a685-4ccf3613e8d4",
-  "timestamp": "2026-10-22T09:55:36Z",
-  "size_bytes": 47073159,
-  "elapsed": 121.700766743,
+  "uuid": "dbe219e9-a26b-4890-b61e-cf18725dbf1b",
+  "timestamp": "2026-10-22T17:30:41Z",
+  "size_bytes": 47082000,
+  "elapsed": 126.298076738,
   "bbox": [
     50.749369,
     4.202947,
