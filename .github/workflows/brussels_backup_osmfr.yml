@@ -1,0 +1,56 @@
+name: Backup Brussels PBF (OSM-FR + diffs minute)
+
+on:
+  workflow_dispatch:
+    inputs:
+      force_download:
+        description: "Retélécharger l'extrait OSM-FR même si le state est identique"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: brussels-daily-pbf
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq osmium-tool
+          pip install "osmium>=4.0" shapely
+
+      - name: Base OSM-FR + application des diffs minute + clip
+        env:
+          FORCE_DOWNLOAD: ${{ inputs.force_download }}
+        run: python pbf_analyse/backup_osmfr_minutely.py
+
+      - name: Generate history-list.json
+        run: python pbf_analyse/generate_history_list.py
+
+      - name: Commit & push
+        run: |
+          git config user.name  "actions-user"
+          git config user.email "actions@github.com"
+          git add pbf_analyse/history/Brussels-daily.pbf \
+                  pbf_analyse/history/state.txt \
+                  pbf_analyse/history-list.json \
+                  pbf_analyse/backup/
+          git diff --cached --quiet && echo "No changes" && exit 0
+          git commit -m "Backup Brussels PBF (OSM-FR + minutely) – $(date -u +%Y-%m-%dT%H:%MZ)"
+          git pull --rebase origin main
+          git push
