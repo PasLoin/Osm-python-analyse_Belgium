@@ -1,14 +1,10 @@
 {
-  "uuid": "72457a06-a60a-46bc-8813-68d4656ebe1b",
-  "timestamp": "2026-10-27T04:45:51Z",
-  "size_bytes": 47153251,
-  "elapsed": 125.812122441,
-  "bbox": [
-    50.749369,
-    4.202947,
-    50.94491,
-    4.512645
-  ],
+  "source": "openstreetmap.fr (backup)",
+  "replication_url": "https://download.openstreetmap.fr/replication/europe/belgium/brussels_capital_region/minute/",
+  "sequence_number": 7346462,
+  "base_sequence_number": 7346282,
+  "timestamp": "2026-10-27T05:07:10Z",
+  "size_bytes": 33440367,
   "boundary_relation": 54094,
   "boundary_poly_url": "https://raw.githubusercontent.com/PasLoin/Osm-python-analyse_Belgium/main/pbf_analyse/54094.poly",
   "buffer_meters": 100
