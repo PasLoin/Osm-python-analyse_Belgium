@@ -542,7 +542,7 @@
     "date": "2026-11-10",
     "filename": "Brussels-daily.pbf",
     "url": "https://raw.githubusercontent.com/PasLoin/Osm-python-analyse_Belgium/main/pbf_analyse/history/Brussels-daily.pbf",
-    "size_bytes": 31829595,
+    "size_bytes": 31829168,
     "type": "daily"
   }
 ]
