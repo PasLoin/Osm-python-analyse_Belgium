@@ -32,7 +32,7 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq osmium-tool
-          pip install "osmium>=4.0" shapely
+          pip install -r requirements/pbf.txt
 
       - name: Restore OSM-FR base from release "daily"
         env:

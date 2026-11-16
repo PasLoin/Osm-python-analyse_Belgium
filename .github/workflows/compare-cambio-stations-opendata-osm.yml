@@ -33,15 +33,15 @@ jobs:
             "https://github.com/PasLoin/Osm-python-analyse_Belgium/releases/download/daily/Brussels-daily.pbf"
           ls -lh pbf_analyse/history/Brussels-daily.pbf
 
-      - name: "Mise en place de Python 3.11"
+      - name: "Mise en place de Python 3.12"
         uses: actions/setup-python@v7
         with:
-          python-version: "3.11"
+          python-version: "3.12"
 
       - name: "Installation des dependances Python"
         run: |
           pip install --upgrade pip
-          pip install osmium requests numpy scipy
+          pip install -r requirements/compare.txt
 
       - name: "Comparaison Cambio vs OSM"
         env:

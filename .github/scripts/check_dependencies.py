@@ -247,18 +247,20 @@ def with_local_imports(scripts, local_imports):
     return seen
 
 
-def impacted(package, item, usage, local_imports, workflow_scripts, root):
+def impacted(package, item, usage, local_imports, workflow_scripts, file_users, root):
     relative = str(item["file"].relative_to(root))
     users = set(usage.get(package, ()))
-    if relative not in workflow_scripts:
+    workflows = [relative] if relative in workflow_scripts else sorted(file_users.get(relative, ()))
+    if not workflows:
         if item["file"].suffix in (".sh", ".bash"):
             return [relative]
         return sorted(users)
-    executed = with_local_imports(workflow_scripts[relative], local_imports)
-    direct = sorted(executed & users)
-    if direct:
-        return direct
-    return [f"{script} (indirect)" for script in sorted(workflow_scripts[relative])]
+    direct, executed = set(), set()
+    for workflow in workflows:
+        scripts = workflow_scripts.get(workflow, set())
+        executed |= scripts
+        direct |= with_local_imports(scripts, local_imports) & users
+    return sorted(direct) or [f"{script} (indirect)" for script in sorted(executed)]
 
 
 def table(headers, rows):
@@ -286,6 +288,10 @@ def build_report(root, offline):
         return newest, "BLOCKS latest"
 
     package_installs = [i for i in installs if "package" in i]
+    file_users = defaultdict(set)
+    for item in installs:
+        if "requirements_file" in item:
+            file_users[os.path.normpath(item["requirements_file"])].add(str(item["file"].relative_to(root)))
     sections = ["# Dependency report", ""]
     outdated = 0
 
@@ -301,7 +307,7 @@ def build_report(root, offline):
             newest,
             state,
             f"`{item['where']}`",
-            "<br>".join(impacted(item["package"], item, usage, local_imports, workflow_scripts, root)) or "-",
+            "<br>".join(impacted(item["package"], item, usage, local_imports, workflow_scripts, file_users, root)) or "-",
         ])
     sections += ["## Pinned or capped versions", ""]
     if limited_rows:
@@ -315,7 +321,7 @@ def build_report(root, offline):
             continue
         group = grouped[(item["package"], format_constraints(item["constraints"]))]
         group["where"].append(item["where"])
-        group["impacted"].update(impacted(item["package"], item, usage, local_imports, workflow_scripts, root))
+        group["impacted"].update(impacted(item["package"], item, usage, local_imports, workflow_scripts, file_users, root))
     loose_rows = []
     for (package, constraint), group in sorted(grouped.items()):
         newest = latest(package) or "?"

@@ -51,7 +51,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install Python dependencies
-        run: pip install shapely
+        run: pip install -r requirements/pbf.txt
 
       - name: Generate snapshot for ${{ matrix.date }}
         run: python pbf_analyse/historical_snapshot.py "${{ matrix.code }}" "${{ matrix.date }}"

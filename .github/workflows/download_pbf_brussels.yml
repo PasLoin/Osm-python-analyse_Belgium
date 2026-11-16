@@ -29,7 +29,7 @@ jobs:
           python-version: '3.11'
 
       - name: Install dependencies
-        run: pip install requests
+        run: pip install -r requirements/download.txt
 
       - name: Download monthly snapshot
         run: python pbf_analyse/download_pbf_brussels.py

@@ -42,7 +42,7 @@ jobs:
           sudo apt-get install -y osmium-tool
 
       - name: Installer les dépendances Python
-        run: pip install aiohttp
+        run: pip install -r requirements/websites.txt
 
       - name: Télécharger le PBF
         run: |
