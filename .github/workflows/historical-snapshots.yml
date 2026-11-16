@@ -82,6 +82,9 @@ jobs:
       - name: Move snapshots into history folder
         run: |
           mkdir -p pbf_analyse/history
+          for f in artifacts/*.pbf; do
+            echo "pbf_analyse/history/$(basename "$f")"
+          done > "$RUNNER_TEMP/snapshots.txt"
           mv artifacts/*.pbf pbf_analyse/history/
           ls -lh pbf_analyse/history/
 
@@ -94,5 +97,13 @@ jobs:
             echo "No changes to commit"
           else
             git commit -m "Add historical Brussels-Capital Region snapshots (2014-2024)"
+            git pull --rebase --autostash origin main
             git push
           fi
+
+      - name: Publish to release "history"
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mapfile -t files < "$RUNNER_TEMP/snapshots.txt"
+          bash .github/scripts/publish_release.sh history "Brussels historical snapshots" "${files[@]}"

@@ -44,5 +44,13 @@ jobs:
             echo "Aucun changement à committer."
           else
             git commit -m "chore(parquet): mise à jour Bruxelles $(date -u +'%Y-%m-%d')"
+            git pull --rebase --autostash origin main
             git push
           fi
+
+      - name: Publish to release "daily"
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          bash .github/scripts/publish_release.sh daily "Brussels daily extracts" \
+            parquet/brussels-latest.parquet

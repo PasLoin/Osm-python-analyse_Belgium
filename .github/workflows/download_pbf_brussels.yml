@@ -31,8 +31,19 @@ jobs:
           git config --global user.name "actions-user"
           git config --global user.email "actions@github.com"
       - name: Save downloaded PBF file to repository
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           python pbf_analyse/download_pbf_brussels.py
-          # Check if there are changes before committing
           git add pbf_analyse/history/*.pbf
-          git diff --cached --exit-code || git commit -m "Downloaded Brussels PBF data" && git push origin HEAD:main
+          mapfile -t changed < <(git diff --cached --name-only -- 'pbf_analyse/history/*_brussels_capital_region.pbf')
+          if git diff --cached --quiet; then
+            echo "No changes"
+            exit 0
+          fi
+          git commit -m "Downloaded Brussels PBF data"
+          git pull --rebase --autostash origin main
+          git push origin HEAD:main
+          if [ "${#changed[@]}" -gt 0 ]; then
+            bash .github/scripts/publish_release.sh history "Brussels historical snapshots" "${changed[@]}"
+          fi
