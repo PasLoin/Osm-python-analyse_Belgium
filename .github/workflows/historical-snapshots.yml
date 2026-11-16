@@ -38,7 +38,7 @@ jobs:
 
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: Install osmium-tool
         run: |
@@ -46,7 +46,7 @@ jobs:
           sudo apt-get install -y osmium-tool
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.12"
 
@@ -57,7 +57,7 @@ jobs:
         run: python pbf_analyse/historical_snapshot.py "${{ matrix.code }}" "${{ matrix.date }}"
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: snapshot-${{ matrix.date }}
           path: output/*_brussels_capital_region.pbf
@@ -70,10 +70,10 @@ jobs:
       contents: write
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: Download all snapshot artifacts
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           path: artifacts
           pattern: snapshot-*
