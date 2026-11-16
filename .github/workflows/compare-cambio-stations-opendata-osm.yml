@@ -25,6 +25,14 @@ jobs:
           lfs: true
           fetch-depth: 1
 
+      - name: "Telechargement du PBF (release daily)"
+        run: |
+          mkdir -p pbf_analyse/history
+          curl -fL --retry 3 --retry-delay 10 \
+            -o pbf_analyse/history/Brussels-daily.pbf \
+            "https://github.com/PasLoin/Osm-python-analyse_Belgium/releases/download/daily/Brussels-daily.pbf"
+          ls -lh pbf_analyse/history/Brussels-daily.pbf
+
       - name: "Mise en place de Python 3.11"
         uses: actions/setup-python@v5
         with:
