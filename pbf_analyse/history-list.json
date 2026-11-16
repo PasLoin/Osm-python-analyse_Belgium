@@ -236,7 +236,7 @@
     "filename": "01_01_2023_brussels_capital_region.pbf",
     "url": "https://github.com/PasLoin/Osm-python-analyse_Belgium/releases/download/history/01_01_2023_brussels_capital_region.pbf",
     "release_url": "https://github.com/PasLoin/Osm-python-analyse_Belgium/releases/download/history/01_01_2023_brussels_capital_region.pbf",
-    "size_bytes": 22374417,
+    "size_bytes": 24670328,
     "type": "snapshot"
   },
   {
@@ -620,7 +620,7 @@
     "filename": "Brussels-daily.pbf",
     "url": "https://github.com/PasLoin/Osm-python-analyse_Belgium/releases/download/daily/Brussels-daily.pbf",
     "release_url": "https://github.com/PasLoin/Osm-python-analyse_Belgium/releases/download/daily/Brussels-daily.pbf",
-    "size_bytes": 33581568,
+    "size_bytes": 31849019,
     "type": "daily"
   }
 ]
