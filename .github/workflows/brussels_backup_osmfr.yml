@@ -52,5 +52,15 @@ jobs:
                   pbf_analyse/backup/
           git diff --cached --quiet && echo "No changes" && exit 0
           git commit -m "Backup Brussels PBF (OSM-FR + minutely) – $(date -u +%Y-%m-%dT%H:%MZ)"
-          git pull --rebase origin main
+          git pull --rebase --autostash origin main
           git push
+
+      - name: Publish to release "daily"
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          bash .github/scripts/publish_release.sh daily "Brussels daily extracts" \
+            pbf_analyse/history/Brussels-daily.pbf \
+            pbf_analyse/history/state.txt \
+            pbf_analyse/backup/osmfr_brussels_capital_region-latest.osm.pbf \
+            pbf_analyse/backup/osmfr_brussels_capital_region.state.txt

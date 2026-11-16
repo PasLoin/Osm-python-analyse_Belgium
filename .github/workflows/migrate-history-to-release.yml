@@ -1,0 +1,47 @@
+name: Migrate history snapshots to release (one-shot)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: migrate-history-to-release
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      - name: Upload snapshots to release "history"
+        run: |
+          bash .github/scripts/publish_release.sh history "Brussels historical snapshots" \
+            pbf_analyse/history/*_brussels_capital_region.pbf
+
+      - name: Upload current daily files to release "daily"
+        run: |
+          bash .github/scripts/publish_release.sh daily "Brussels daily extracts" \
+            pbf_analyse/history/Brussels-daily.pbf \
+            pbf_analyse/history/state.txt \
+            pbf_analyse/backup/osmfr_brussels_capital_region-latest.osm.pbf \
+            pbf_analyse/backup/osmfr_brussels_capital_region.state.txt \
+            parquet/brussels-latest.parquet
+
+      - name: Verify release "history" against repository
+        run: |
+          for f in pbf_analyse/history/*_brussels_capital_region.pbf; do
+            echo "$(stat -c %s "$f") $(basename "$f")"
+          done | sort -k2 > "$RUNNER_TEMP/local.txt"
+          gh release view history --json assets \
+            --jq '.assets[] | "\(.size) \(.name)"' | sort -k2 > "$RUNNER_TEMP/remote.txt"
+          diff "$RUNNER_TEMP/local.txt" "$RUNNER_TEMP/remote.txt"
+          echo "OK: $(wc -l < "$RUNNER_TEMP/local.txt") snapshots identical"
