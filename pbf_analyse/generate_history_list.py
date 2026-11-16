@@ -3,15 +3,16 @@
 import json
 import os
 import re
+import urllib.request
 from datetime import datetime, timezone
+
+REPOSITORY = "PasLoin/Osm-python-analyse_Belgium"
+API_URL = os.environ.get("GITHUB_API_URL", "https://api.github.com")
 
 HISTORY_DIR = os.path.join(os.path.dirname(__file__), "history")
 OUTPUT_FILE = os.path.join(os.path.dirname(__file__), "history-list.json")
 
-RELEASE_BASE = (
-    "https://github.com/PasLoin/"
-    "Osm-python-analyse_Belgium/releases/download"
-)
+RELEASE_BASE = f"https://github.com/{REPOSITORY}/releases/download"
 HISTORY_RELEASE_TAG = "history"
 DAILY_RELEASE_TAG = "daily"
 
@@ -20,43 +21,72 @@ PATTERN = re.compile(r"^(\d{2})_(\d{2})_(\d{4})_brussels_capital_region\.pbf$")
 DAILY_FILENAME = "Brussels-daily.pbf"
 
 
-def main():
-    if not os.path.isdir(HISTORY_DIR):
-        raise FileNotFoundError(f"History directory not found: {HISTORY_DIR}")
+def api_get(path: str):
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "User-Agent": "Osm-python-analyse_Belgium history list",
+    }
+    token = os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN")
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    req = urllib.request.Request(f"{API_URL}/repos/{REPOSITORY}/{path}", headers=headers)
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        return json.load(resp)
 
+
+def release_assets(tag: str) -> dict:
+    release = api_get(f"releases/tags/{tag}")
+    assets = {}
+    page = 1
+    while True:
+        batch = api_get(f"releases/{release['id']}/assets?per_page=100&page={page}")
+        for asset in batch:
+            if asset.get("state", "uploaded") == "uploaded":
+                assets[asset["name"]] = asset["size"]
+        if len(batch) < 100:
+            break
+        page += 1
+    return assets
+
+
+def main():
     entries = []
 
-    # ── Dated monthly/yearly snapshots ─────────────────────────────
-    for fname in sorted(os.listdir(HISTORY_DIR)):
+    for fname, size in release_assets(HISTORY_RELEASE_TAG).items():
         m = PATTERN.match(fname)
         if not m:
             continue
 
         dd, mm, yyyy = m.groups()
-        date_iso = f"{yyyy}-{mm}-{dd}"
-        path = os.path.join(HISTORY_DIR, fname)
-
+        url = f"{RELEASE_BASE}/{HISTORY_RELEASE_TAG}/{fname}"
         entries.append({
-            "date": date_iso,
+            "date": f"{yyyy}-{mm}-{dd}",
             "filename": fname,
-            "url": f"{RELEASE_BASE}/{HISTORY_RELEASE_TAG}/{fname}",
-            "release_url": f"{RELEASE_BASE}/{HISTORY_RELEASE_TAG}/{fname}",
-            "size_bytes": os.path.getsize(path),
+            "url": url,
+            "release_url": url,
+            "size_bytes": size,
             "type": "snapshot",
         })
 
+    if not entries:
+        raise RuntimeError(f"No snapshot found in release '{HISTORY_RELEASE_TAG}'")
+
     entries.sort(key=lambda e: e["date"])
 
-    # ── Daily extract (always "today", appended last) ─────────────
     daily_path = os.path.join(HISTORY_DIR, DAILY_FILENAME)
     if os.path.isfile(daily_path):
-        today_iso = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        daily_size = os.path.getsize(daily_path)
+    else:
+        daily_size = release_assets(DAILY_RELEASE_TAG).get(DAILY_FILENAME)
+
+    if daily_size is not None:
+        url = f"{RELEASE_BASE}/{DAILY_RELEASE_TAG}/{DAILY_FILENAME}"
         entries.append({
-            "date": today_iso,
+            "date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
             "filename": DAILY_FILENAME,
-            "url": f"{RELEASE_BASE}/{DAILY_RELEASE_TAG}/{DAILY_FILENAME}",
-            "release_url": f"{RELEASE_BASE}/{DAILY_RELEASE_TAG}/{DAILY_FILENAME}",
-            "size_bytes": os.path.getsize(daily_path),
+            "url": url,
+            "release_url": url,
+            "size_bytes": daily_size,
             "type": "daily",
         })
     else:

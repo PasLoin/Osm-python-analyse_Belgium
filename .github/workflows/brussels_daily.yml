@@ -35,17 +35,9 @@ jobs:
         run: python pbf_analyse/extract_brussels_daily.py
 
       - name: Generate history-list.json
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: python pbf_analyse/generate_history_list.py
-
-      - name: Commit & push
-        run: |
-          git config user.name  "actions-user"
-          git config user.email "actions@github.com"
-          git add pbf_analyse/history/Brussels-daily.pbf pbf_analyse/history/state.txt pbf_analyse/history-list.json
-          git diff --cached --quiet && echo "No changes" && exit 0
-          git commit -m "Daily Brussels PBF extract – $(date -u +%Y-%m-%d)"
-          git pull --rebase --autostash origin main
-          git push
 
       - name: Publish to release "daily"
         env:
@@ -54,3 +46,13 @@ jobs:
           bash .github/scripts/publish_release.sh daily "Brussels daily extracts" \
             pbf_analyse/history/Brussels-daily.pbf \
             pbf_analyse/history/state.txt
+
+      - name: Commit & push metadata
+        run: |
+          git config user.name  "actions-user"
+          git config user.email "actions@github.com"
+          git add pbf_analyse/history/state.txt pbf_analyse/history-list.json
+          git diff --cached --quiet && echo "No changes" && exit 0
+          git commit -m "Daily Brussels PBF extract – $(date -u +%Y-%m-%d)"
+          git pull --rebase --autostash origin main
+          git push
