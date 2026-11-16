@@ -1,0 +1,4 @@
+numpy==2.5.5
+osmium==4.3.2
+requests==2.34.2
+scipy==1.18.1
