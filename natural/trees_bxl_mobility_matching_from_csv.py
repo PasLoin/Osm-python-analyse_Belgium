@@ -361,7 +361,7 @@ if __name__ == '__main__':
                 exit(1)
     else:
         osm_input = 'brussels_capital_region.pbf'
-        url = "https://raw.githubusercontent.com/PasLoin/Osm-python-analyse_Belgium/main/pbf_analyse/history/Brussels-daily.pbf"
+        url = "https://github.com/PasLoin/Osm-python-analyse_Belgium/releases/download/daily/Brussels-daily.pbf"
         print(f"Téléchargement du PBF depuis {url}…")
         r = requests.get(url)
         with open(osm_input, "wb") as f:
