@@ -34,26 +34,25 @@ jobs:
           sudo apt-get install -y -qq osmium-tool
           pip install "osmium>=4.0" shapely
 
+      - name: Restore OSM-FR base from release "daily"
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p pbf_analyse/backup
+          gh release download daily \
+            --pattern 'osmfr_brussels_capital_region*' \
+            --dir pbf_analyse/backup --clobber \
+            || echo "::warning::Base OSM-FR absente de la release, elle sera retéléchargée."
+
       - name: Base OSM-FR + application des diffs minute + clip
         env:
           FORCE_DOWNLOAD: ${{ inputs.force_download }}
         run: python pbf_analyse/backup_osmfr_minutely.py
 
       - name: Generate history-list.json
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: python pbf_analyse/generate_history_list.py
-
-      - name: Commit & push
-        run: |
-          git config user.name  "actions-user"
-          git config user.email "actions@github.com"
-          git add pbf_analyse/history/Brussels-daily.pbf \
-                  pbf_analyse/history/state.txt \
-                  pbf_analyse/history-list.json \
-                  pbf_analyse/backup/
-          git diff --cached --quiet && echo "No changes" && exit 0
-          git commit -m "Backup Brussels PBF (OSM-FR + minutely) – $(date -u +%Y-%m-%dT%H:%MZ)"
-          git pull --rebase --autostash origin main
-          git push
 
       - name: Publish to release "daily"
         env:
@@ -64,3 +63,13 @@ jobs:
             pbf_analyse/history/state.txt \
             pbf_analyse/backup/osmfr_brussels_capital_region-latest.osm.pbf \
             pbf_analyse/backup/osmfr_brussels_capital_region.state.txt
+
+      - name: Commit & push metadata
+        run: |
+          git config user.name  "actions-user"
+          git config user.email "actions@github.com"
+          git add pbf_analyse/history/state.txt pbf_analyse/history-list.json
+          git diff --cached --quiet && echo "No changes" && exit 0
+          git commit -m "Backup Brussels PBF (OSM-FR + minutely) – $(date -u +%Y-%m-%dT%H:%MZ)"
+          git pull --rebase --autostash origin main
+          git push

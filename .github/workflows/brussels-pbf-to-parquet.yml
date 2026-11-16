@@ -35,19 +35,6 @@ jobs:
       - name: Convert PBF to GeoParquet
         run: python parquet/convert_to_parquet.py
 
-      - name: Commit and push result
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add parquet/brussels-latest.parquet
-          if git diff --cached --quiet; then
-            echo "Aucun changement à committer."
-          else
-            git commit -m "chore(parquet): mise à jour Bruxelles $(date -u +'%Y-%m-%d')"
-            git pull --rebase --autostash origin main
-            git push
-          fi
-
       - name: Publish to release "daily"
         env:
           GH_TOKEN: ${{ github.token }}
