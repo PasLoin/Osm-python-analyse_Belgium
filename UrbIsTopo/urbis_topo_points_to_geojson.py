@@ -46,8 +46,8 @@ METRIC_CRS = "EPSG:31370"   # Pour les calculs de distance (en mètres)
 
 # ── Configuration OSM ────────────────────────────────────────────────
 OSM_PBF_URL = (
-    "https://raw.githubusercontent.com/PasLoin/Osm-python-analyse_Belgium/"
-    "main/pbf_analyse/history/Brussels-daily.pbf"
+    "https://github.com/PasLoin/Osm-python-analyse_Belgium/"
+    "releases/download/daily/Brussels-daily.pbf"
 )
 CANDIDATES_DIR = Path("candidates")
 DEFAULT_DISTANCE_M = 1.0

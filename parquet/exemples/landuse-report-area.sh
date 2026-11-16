@@ -2,7 +2,7 @@
 #### this a exemple in bash to use parquet file to caluclate area on landuse
 set -euo pipefail
 
-URL="https://raw.githubusercontent.com/PasLoin/Osm-python-analyse_Belgium/main/parquet/brussels-latest.parquet"
+URL="https://github.com/PasLoin/Osm-python-analyse_Belgium/releases/download/daily/brussels-latest.parquet"
 MAX_AREA_M2="${1:-100}"
 TMP_DIR="$(mktemp -d)"
 FILE="$TMP_DIR/brussels-latest.parquet"

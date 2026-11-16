@@ -8,11 +8,6 @@ from datetime import datetime, timezone
 HISTORY_DIR = os.path.join(os.path.dirname(__file__), "history")
 OUTPUT_FILE = os.path.join(os.path.dirname(__file__), "history-list.json")
 
-RAW_BASE = (
-    "https://raw.githubusercontent.com/PasLoin/"
-    "Osm-python-analyse_Belgium/main/pbf_analyse/history"
-)
-
 RELEASE_BASE = (
     "https://github.com/PasLoin/"
     "Osm-python-analyse_Belgium/releases/download"
@@ -44,7 +39,7 @@ def main():
         entries.append({
             "date": date_iso,
             "filename": fname,
-            "url": f"{RAW_BASE}/{fname}",
+            "url": f"{RELEASE_BASE}/{HISTORY_RELEASE_TAG}/{fname}",
             "release_url": f"{RELEASE_BASE}/{HISTORY_RELEASE_TAG}/{fname}",
             "size_bytes": os.path.getsize(path),
             "type": "snapshot",
@@ -59,7 +54,7 @@ def main():
         entries.append({
             "date": today_iso,
             "filename": DAILY_FILENAME,
-            "url": f"{RAW_BASE}/{DAILY_FILENAME}",
+            "url": f"{RELEASE_BASE}/{DAILY_RELEASE_TAG}/{DAILY_FILENAME}",
             "release_url": f"{RELEASE_BASE}/{DAILY_RELEASE_TAG}/{DAILY_FILENAME}",
             "size_bytes": os.path.getsize(daily_path),
             "type": "daily",
