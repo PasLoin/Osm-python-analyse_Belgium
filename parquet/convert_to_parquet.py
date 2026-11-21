@@ -12,7 +12,7 @@ SOURCE_PBF_URL = (
 OUTPUT_DIR = Path(__file__).resolve().parent
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-output_path = OUTPUT_DIR / "brussels-latest.parquet"
+output_path = OUTPUT_DIR / "Brussels-daily.quackosm.parquet"
 
 print(f"Source : {SOURCE_PBF_URL}")
 print(f"Sortie : {output_path}")
