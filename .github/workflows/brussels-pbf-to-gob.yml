@@ -2,7 +2,9 @@ name: Brussels PBF to GOB (GeoDesk)
 
 on:
   workflow_run:
-    workflows: ["Daily Brussels PBF Extract (SliceOSM)"]
+    workflows:
+      - "Daily Brussels PBF Extract (SliceOSM)"
+      - "Backup Brussels PBF (OSM-FR + diffs minute)"
     types: [completed]
   workflow_dispatch:
     inputs:
@@ -33,7 +35,7 @@ jobs:
 
       - name: Runner environment
         run: |
-          echo "Déclencheur : ${{ github.event_name }}"
+          echo "Déclencheur : ${{ github.event_name }} ${{ github.event.workflow_run.name }}"
           cat /etc/os-release | grep -E "^(PRETTY_NAME|VERSION_ID)="
           ldd --version | head -1
           openssl version

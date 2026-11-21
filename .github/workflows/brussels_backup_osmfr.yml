@@ -1,12 +1,7 @@
 name: Backup Brussels PBF (OSM-FR + diffs minute)
 
 on:
-  workflow_dispatch:
-    inputs:
-      force_download:
-        description: "Retélécharger l'extrait OSM-FR même si le state est identique"
-        type: boolean
-        default: false
+  workflow_dispatch: {}
 
 permissions:
   contents: write
@@ -34,19 +29,7 @@ jobs:
           sudo apt-get install -y -qq osmium-tool
           pip install -r requirements/pbf.txt
 
-      - name: Restore OSM-FR base from release "daily"
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          mkdir -p pbf_analyse/backup
-          gh release download daily \
-            --pattern 'osmfr_brussels_capital_region*' \
-            --dir pbf_analyse/backup --clobber \
-            || echo "::warning::Base OSM-FR absente de la release, elle sera retéléchargée."
-
       - name: Base OSM-FR + application des diffs minute + clip
-        env:
-          FORCE_DOWNLOAD: ${{ inputs.force_download }}
         run: python pbf_analyse/backup_osmfr_minutely.py
 
       - name: Generate history-list.json
@@ -60,9 +43,15 @@ jobs:
         run: |
           bash .github/scripts/publish_release.sh daily "Brussels daily extracts" \
             pbf_analyse/history/Brussels-daily.pbf \
-            pbf_analyse/history/state.txt \
-            pbf_analyse/backup/osmfr_brussels_capital_region-latest.osm.pbf \
-            pbf_analyse/backup/osmfr_brussels_capital_region.state.txt
+            pbf_analyse/history/state.txt
+
+      - name: Remove legacy OSM-FR assets from release "daily"
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for a in osmfr_brussels_capital_region-latest.osm.pbf osmfr_brussels_capital_region.state.txt; do
+            gh release delete-asset daily "$a" --yes && echo "Supprimé : $a" || echo "Absent : $a"
+          done
 
       - name: Commit & push metadata
         run: |
