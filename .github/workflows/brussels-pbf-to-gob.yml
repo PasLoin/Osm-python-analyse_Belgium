@@ -1,0 +1,86 @@
+name: Brussels PBF to GOB (GeoDesk)
+
+on:
+  workflow_dispatch:
+    inputs:
+      gol_version:
+        description: "Version de GOL Tool"
+        default: "2.5.4"
+        required: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: brussels-pbf-to-gob
+  cancel-in-progress: false
+
+jobs:
+  gob:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      GOL_VERSION: ${{ inputs.gol_version }}
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 1
+
+      - name: Runner environment
+        run: |
+          cat /etc/os-release | grep -E "^(PRETTY_NAME|VERSION_ID)="
+          ldd --version | head -1
+          openssl version
+          nproc
+          free -h | head -2
+          df -h . | tail -1
+
+      - name: Download official GOL Tool
+        run: |
+          curl -sSfL -o gol.zip "https://github.com/clarisma/geodesk-gol/releases/download/v${GOL_VERSION}/gol-${GOL_VERSION}-linux.zip"
+          unzip -o gol.zip -d gol-bin
+          GOL=$(find gol-bin -type f -name gol | head -n1)
+          chmod +x "$GOL"
+          echo "GOL=$PWD/$GOL" >> "$GITHUB_ENV"
+          ldd "$GOL"
+          "$GOL" 2>&1 | head -n 15
+
+      - name: Download Brussels-daily.pbf
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p gob
+          gh release download daily --pattern 'Brussels-daily.pbf' --dir gob --clobber
+          ls -lh gob/Brussels-daily.pbf
+
+      - name: Build GOL and save GOB
+        working-directory: gob
+        run: |
+          rm -f Brussels-daily.gol Brussels-daily.gob
+          time "$GOL" build Brussels-daily Brussels-daily.pbf
+          time "$GOL" save Brussels-daily Brussels-daily.gob
+          "$GOL" info Brussels-daily || true
+          ls -lh Brussels-daily.pbf Brussels-daily.gol Brussels-daily.gob
+
+      - name: Check GOB reload
+        working-directory: gob
+        run: |
+          rm -f check.gol
+          "$GOL" load check Brussels-daily.gob
+          "$GOL" query check "na[amenity=restaurant]" -f count
+          ls -lh check.gol
+
+      - name: Upload GOB as workflow artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: brussels-daily-gob
+          path: gob/Brussels-daily.gob
+          retention-days: 7
+
+      - name: Publish to release "daily"
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          bash .github/scripts/publish_release.sh daily "Brussels daily extracts" \
+            gob/Brussels-daily.gob
