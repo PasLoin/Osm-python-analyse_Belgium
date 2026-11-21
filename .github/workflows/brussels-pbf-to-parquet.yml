@@ -48,4 +48,16 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           bash .github/scripts/publish_release.sh daily "Brussels daily extracts" \
-            parquet/brussels-latest.parquet
+            parquet/Brussels-daily.quackosm.parquet
+
+      - name: Remove legacy Parquet asset from release "daily"
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete-asset daily brussels-latest.parquet --yes && echo "Supprimé : brussels-latest.parquet" || echo "Absent : brussels-latest.parquet"
+
+      - name: Update release "daily" description
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release edit daily --notes-file .github/release-notes/daily.md
