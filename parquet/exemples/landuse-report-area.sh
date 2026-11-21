@@ -2,10 +2,10 @@
 #### this a exemple in bash to use parquet file to caluclate area on landuse
 set -euo pipefail
 
-URL="https://github.com/PasLoin/Osm-python-analyse_Belgium/releases/download/daily/brussels-latest.parquet"
+URL="https://github.com/PasLoin/Osm-python-analyse_Belgium/releases/download/daily/Brussels-daily.quackosm.parquet"
 MAX_AREA_M2="${1:-100}"
 TMP_DIR="$(mktemp -d)"
-FILE="$TMP_DIR/brussels-latest.parquet"
+FILE="$TMP_DIR/Brussels-daily.quackosm.parquet"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VENV_DIR="$SCRIPT_DIR/venv"
 OUTPUT_CSV="$SCRIPT_DIR/small_landuse.csv"
