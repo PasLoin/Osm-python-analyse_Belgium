@@ -1,6 +1,9 @@
 name: Brussels PBF to GOB (GeoDesk)
 
 on:
+  workflow_run:
+    workflows: ["Daily Brussels PBF Extract (SliceOSM)"]
+    types: [completed]
   workflow_dispatch:
     inputs:
       gol_version:
@@ -17,10 +20,11 @@ concurrency:
 
 jobs:
   gob:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
-      GOL_VERSION: ${{ inputs.gol_version }}
+      GOL_VERSION: ${{ inputs.gol_version || '2.5.4' }}
     steps:
       - name: Checkout repo
         uses: actions/checkout@v7
@@ -29,6 +33,7 @@ jobs:
 
       - name: Runner environment
         run: |
+          echo "Déclencheur : ${{ github.event_name }}"
           cat /etc/os-release | grep -E "^(PRETTY_NAME|VERSION_ID)="
           ldd --version | head -1
           openssl version
