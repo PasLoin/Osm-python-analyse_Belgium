@@ -39,6 +39,8 @@ jobs:
 
       - name: Apply hourly diffs + clip
         id: update
+        env:
+          PYTHONUNBUFFERED: "1"
         run: python pbf_analyse/update_daily_hourly.py
 
       - name: Generate history-list.json
