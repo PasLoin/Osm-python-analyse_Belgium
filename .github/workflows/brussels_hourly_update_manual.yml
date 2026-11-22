@@ -1,0 +1,68 @@
+name: Hourly update Brussels PBF (OSM diffs)
+
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: brussels-daily-pbf
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq osmium-tool
+          pip install -r requirements/pbf.txt
+
+      - name: Download current daily extract
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download daily \
+            -p Brussels-daily.pbf -p state.txt \
+            -D pbf_analyse/history --clobber
+
+      - name: Apply hourly diffs + clip
+        id: update
+        run: python pbf_analyse/update_daily_hourly.py
+
+      - name: Generate history-list.json
+        if: steps.update.outputs.updated == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python pbf_analyse/generate_history_list.py
+
+      - name: Publish to release "daily"
+        if: steps.update.outputs.updated == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          bash .github/scripts/publish_release.sh daily "Brussels daily extracts" \
+            pbf_analyse/history/Brussels-daily.pbf \
+            pbf_analyse/history/state.txt
+
+      - name: Commit & push metadata
+        if: steps.update.outputs.updated == 'true'
+        run: |
+          git config user.name  "actions-user"
+          git config user.email "actions@github.com"
+          git add pbf_analyse/history/state.txt pbf_analyse/history-list.json
+          git diff --cached --quiet && echo "No changes" && exit 0
+          git commit -m "Hourly update Brussels PBF – $(date -u +%Y-%m-%dT%H:%MZ)"
+          git pull --rebase --autostash origin main
+          git push
