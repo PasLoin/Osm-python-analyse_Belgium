@@ -5,6 +5,7 @@ on:
     workflows:
       - "Daily Brussels PBF Extract (SliceOSM)"
       - "Backup Brussels PBF (OSM-FR + diffs minute)"
+      - "Hourly update Brussels PBF (OSM diffs)"
     types: [completed]
   workflow_dispatch:
     inputs:
