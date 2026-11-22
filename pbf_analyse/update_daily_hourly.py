@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import datetime as dt
 import json
+import logging
 import os
 import shutil
 import sys
@@ -165,7 +166,14 @@ def write_outputs(updated: bool, lines: list[str]):
             f.write("".join(f"- {line}\n" for line in lines))
 
 
+def setup_logging():
+    logging.basicConfig(format="%(asctime)s %(message)s", datefmt="%H:%M:%S", level=logging.INFO)
+    logging.getLogger("pyosmium").setLevel(logging.DEBUG)
+    logging.getLogger("urllib3").setLevel(logging.WARNING)
+
+
 def main():
+    setup_logging()
     if not os.path.isfile(DAILY_PBF):
         raise RuntimeError(f"{DAILY_PBF} introuvable")
 
@@ -175,6 +183,8 @@ def main():
     with ReplicationServer(REPLICATION_URL) as svr:
         svr.set_request_parameter("headers", {"User-Agent": USER_AGENT})
         svr.set_request_parameter("timeout", 120)
+        if svr.get_state_info() is None:
+            raise RuntimeError(f"Serveur de réplication injoignable : {REPLICATION_URL}state.txt")
 
         start, base_ts, origin = find_start(svr, header, state)
         print(f"Point de départ : seq={start} d'après {origin}")
