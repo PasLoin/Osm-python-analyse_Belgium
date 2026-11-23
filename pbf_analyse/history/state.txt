@@ -1,12 +1,14 @@
 {
-  "source": "openstreetmap.org (diffs horaires)",
-  "replication_url": "https://planet.openstreetmap.org/replication/hour/",
-  "sequence_number": 124435,
-  "timestamp": "2026-11-23T02:00:00Z",
-  "base_source": "SliceOSM",
-  "base_timestamp": "2026-11-22T07:12:30Z",
-  "diffs_applied": 20,
-  "size_bytes": 31880025,
+  "uuid": "33637856-89e6-40cb-91fe-f6d4e3152c3e",
+  "timestamp": "2026-11-23T07:57:12Z",
+  "size_bytes": 47423551,
+  "elapsed": 122.748801813,
+  "bbox": [
+    50.749369,
+    4.202947,
+    50.94491,
+    4.512645
+  ],
   "boundary_relation": 54094,
   "boundary_poly_url": "https://raw.githubusercontent.com/PasLoin/Osm-python-analyse_Belgium/main/pbf_analyse/54094.poly",
   "buffer_meters": 100
