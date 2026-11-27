@@ -616,11 +616,11 @@
     "type": "snapshot"
   },
   {
-    "date": "2026-11-26",
+    "date": "2026-11-27",
     "filename": "Brussels-daily.pbf",
     "url": "https://github.com/PasLoin/Osm-python-analyse_Belgium/releases/download/daily/Brussels-daily.pbf",
     "release_url": "https://github.com/PasLoin/Osm-python-analyse_Belgium/releases/download/daily/Brussels-daily.pbf",
-    "size_bytes": 31886816,
+    "size_bytes": 31889720,
     "type": "daily"
   }
 ]
